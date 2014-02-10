@@ -2,17 +2,52 @@
 
 #include "stream_work.h"
 
+StreamWork* StreamWorkMaker::make(tcp_worker_params_t *params,
+                                  int sock) {
 
-StreamWork::StreamWork(int sock)
-    : sock(sock) {
+    StreamWork* work;
+
+    if(params->stream_work_type == tcp_worker_params_t::ECHO) {
+        printf("HERP DERP\n");
+    }
+
+    printf("%d\n", tcp_worker_params_t::ECHO);
+    printf("%d\n", tcp_worker_params_t::RANDOM);
+    printf("%d\n", tcp_worker_params_t::HTTP_CLIENT);
+    printf("%d\n", params->stream_work_type);
+
+    switch(params->stream_work_type) {
+    case tcp_worker_params_t::ECHO:
+        work = new EchoStreamWork(&params->echo_work,
+                                  sock);
+        break;
+    case tcp_worker_params_t::RANDOM:
+        work = new RandomStreamWork(&params->random_work,
+                                    sock);
+        break;
+    case tcp_worker_params_t::HTTP_CLIENT:
+        work = new HttpClientStreamWork(&params->httpclient_work,
+                                        sock);
+        break;
+    default:
+        printf("invalid stream_work_type\n");
+        exit(EXIT_FAILURE);
+    }
+
+    return work;
 
 }
 
+////////////////////////////////////////////////////////////////////////////////
+StreamWork::StreamWork(stream_work_params_t *params,
+                       int sock)
+    : params(params),
+      sock(sock) {
+
+}
 
 StreamWork::~StreamWork() {
 }
-
-
 
 int StreamWork::read_handler(char *recvbuf, ssize_t recvlen) {
     printf("dumb:%s", recvbuf);
@@ -25,9 +60,10 @@ int StreamWork::write_handler(char *sendbuf, ssize_t &sendlen) {
     return STREAMWORK_FINISHED;
 }
 
-
-EchoStreamWork::EchoStreamWork(int sock)
-        : StreamWork(sock) {
+////////////////////////////////////////////////////////////////////////////////
+EchoStreamWork::EchoStreamWork(stream_work_echo_params_t *params,
+                               int sock)
+    : StreamWork(params, sock) {
 }
 
 
@@ -47,9 +83,10 @@ int EchoStreamWork::read_handler(char *recvbuf, ssize_t recvlen) {
     return STREAMWORK_CONTINUE;
 }
 
-
-RandomStreamWork::RandomStreamWork(int sock)
-        : EchoStreamWork(sock) {
+////////////////////////////////////////////////////////////////////////////////
+RandomStreamWork::RandomStreamWork(stream_work_random_params_t *params,
+                                   int sock)
+    : EchoStreamWork(params, sock) {
 }
 
 
@@ -67,9 +104,10 @@ int RandomStreamWork::write_handler(char *sendbuf, ssize_t &sendlen) {
     return STREAMWORK_FINISHED;
 }
 
-
-HttpClientStreamWork::HttpClientStreamWork(int sock)
-    : StreamWork(sock) {
+////////////////////////////////////////////////////////////////////////////////
+HttpClientStreamWork::HttpClientStreamWork(stream_work_httpclient_params_t *params,
+                                           int sock)
+    : StreamWork(params, sock) {
 }
 
 

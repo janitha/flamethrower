@@ -8,14 +8,26 @@
 #define STREAMWORK_CONTINUE  0
 #define STREAMWORK_ERROR    -1
 
+class StreamWork;
+
+////////////////////////////////////////////////////////////////////////////////
+// Creates stream work classes
+////////////////////////////////////////////////////////////////////////////////
+class StreamWorkMaker {
+public:
+    static StreamWork* make(tcp_worker_params_t *params,
+                            int sock);
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 // Base class for Work
 ////////////////////////////////////////////////////////////////////////////////
 class StreamWork {
+    stream_work_params_t *params;
 public:
     int sock;
-    StreamWork(int sock);
+    StreamWork(stream_work_params_t *params,
+               int sock);
     virtual ~StreamWork();
     virtual int read_handler(char *recvbuf, ssize_t recvlen);
     virtual int write_handler(char *sendbuf, ssize_t &sendlen);
@@ -26,8 +38,10 @@ public:
 // Echo work
 ////////////////////////////////////////////////////////////////////////////////
 class EchoStreamWork : public StreamWork {
+    stream_work_echo_params_t *params;
 public:
-    EchoStreamWork(int sock);
+    EchoStreamWork(stream_work_echo_params_t *params,
+                   int sock);
     virtual ~EchoStreamWork();
     virtual int read_handler(char *recvbuf, ssize_t recvlen);
 };
@@ -37,8 +51,10 @@ public:
 // Random sender and echo work
 ////////////////////////////////////////////////////////////////////////////////
 class RandomStreamWork : public EchoStreamWork {
+    stream_work_random_params_t *params;
 public:
-    RandomStreamWork(int sock);
+    RandomStreamWork(stream_work_random_params_t *params,
+                     int sock);
     virtual ~RandomStreamWork();
     virtual int write_handler(char *sendbuf, ssize_t &sendlen);
 };
@@ -48,8 +64,10 @@ public:
 // HTTP client work
 ////////////////////////////////////////////////////////////////////////////////
 class HttpClientStreamWork : public StreamWork {
+    stream_work_httpclient_params_t *params;
 public:
-    HttpClientStreamWork(int sock);
+    HttpClientStreamWork(stream_work_httpclient_params_t *params,
+                         int sock);
     virtual ~HttpClientStreamWork();
     virtual int write_handler(char *sendbuf, ssize_t &sendlen);
 };

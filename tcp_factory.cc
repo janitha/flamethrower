@@ -2,20 +2,37 @@
 #include "tcp_worker.h"
 
 
-TcpFactory::TcpFactory(struct ev_loop *loop)
-    : loop(loop) {
+////////////////////////////////////////////////////////////////////////////////
+void FactoryMaker::make(struct ev_loop *loop,
+                        factory_params_t *params) {
+
+    if(params->factory_type == factory_params_t::TCP_SERVER) {
+        new TcpServerFactory(loop, &params->tcp_server);
+    } else if(params->factory_type == factory_params_t::TCP_CLIENT) {
+        new TcpClientFactory(loop, &params->tcp_client);
+    } else {
+        printf("invalid factory type\n");
+        exit(EXIT_FAILURE);
+    }
+    return;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+TcpFactory::TcpFactory(struct ev_loop *loop,
+                       tcp_factory_params_t *params)
+    : params(params),
+      loop(loop) {
+}
 
 TcpFactory::~TcpFactory() {
 }
 
-
+////////////////////////////////////////////////////////////////////////////////
 TcpServerFactory::TcpServerFactory(struct ev_loop *loop,
-                                   uint32_t bind_addr,
-                                   uint16_t bind_port,
-                                   uint32_t accept_backlog)
-    : TcpFactory(loop) {
+                                   tcp_server_factory_params_t *params)
+    : TcpFactory(loop, params) {
+
+    printf("ctor tcpserverfactory\n");
 
     if((accept_sock = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK,
                              IPPROTO_TCP)) < 0) {
@@ -30,15 +47,15 @@ TcpServerFactory::TcpServerFactory(struct ev_loop *loop,
     struct sockaddr_in sa_in;
     memset(&sa_in, 0, sizeof(sa_in));
     sa_in.sin_family = AF_INET;
-    sa_in.sin_port = bind_port;
-    sa_in.sin_addr.s_addr = bind_addr;
+    sa_in.sin_port = params->bind_port;
+    sa_in.sin_addr.s_addr = params->bind_addr;
     if(bind(accept_sock, (struct sockaddr*)&sa_in, sizeof(sa_in)) != 0) {
         perror("socket bind error");
         exit(EXIT_FAILURE);
     }
 
     // Listen
-    if(listen(accept_sock, accept_backlog) < 0) {
+    if(listen(accept_sock, params->accept_backlog) < 0) {
         perror("socket listen error");
         exit(EXIT_FAILURE);
     }
@@ -87,29 +104,25 @@ void TcpServerFactory::accept_cb(struct ev_loop *loop,
 
         // TODO(Janitha): factory should track workers to delete later on
         // TODO(Janitha): Have a function that dynamically generates workers
-        TcpServerWorker *worker = new TcpServerWorker(loop, factory, client_sd);
+
+        TcpServerWorker *worker = new TcpServerWorker(loop,
+                                                      factory,
+                                                      &factory->params->server_worker,
+                                                      client_sd);
 
     }
 }
 
-
+////////////////////////////////////////////////////////////////////////////////
 TcpClientFactory::TcpClientFactory(struct ev_loop *loop,
-                                   uint32_t bind_addr,
-                                   uint16_t bind_port,
-                                   uint32_t server_addr,
-                                   uint16_t server_port,
-                                   float    timeout)
-    : TcpFactory(loop) {
+                                   tcp_client_factory_params_t *params)
+    : TcpFactory(loop, params) {
 
-    // TODO(janitha): Shcedule workers here
+    printf("ctor tcpclientfactory\n");
 
-    TcpClientWorker *tcw = new TcpClientWorker(loop,
-                                               this,
-                                               bind_addr,
-                                               bind_port,
-                                               server_addr,
-                                               server_port,
-                                               timeout);
+    TcpClientWorker *tcw = new TcpClientWorker(loop, this,
+                                               &params->client_worker);
+
 }
 
 

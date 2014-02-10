@@ -1,8 +1,12 @@
 #include "tcp_worker.h"
 
 
-TcpWorker::TcpWorker(struct ev_loop *loop, TcpFactory *factory, int sock)
-    : loop(loop),
+TcpWorker::TcpWorker(struct ev_loop *loop,
+                     TcpFactory *factory,
+                     tcp_worker_params_t *params,
+                     int sock)
+    : params(params),
+      loop(loop),
       factory(factory),
       sock(sock) {
 }
@@ -114,10 +118,13 @@ void TcpWorker::write_cb(struct ev_loop *loop, struct ev_io *watcher, int revent
 }
 
 
-TcpServerWorker::TcpServerWorker(struct ev_loop *loop, TcpFactory *factory, int sock)
-    : TcpWorker(loop, factory, sock) {
+TcpServerWorker::TcpServerWorker(struct ev_loop *loop,
+                                 TcpFactory *factory,
+                                 tcp_server_worker_params_t *params,
+                                 int sock)
+    : TcpWorker(loop, factory, params, sock) {
 
-    work = new EchoStreamWork(sock);
+    work = StreamWorkMaker::make(params, sock);
 
     // Hookup socket readable event
     sock_r_ev.data = this;
@@ -133,12 +140,8 @@ TcpServerWorker::~TcpServerWorker() {
 
 TcpClientWorker::TcpClientWorker(struct ev_loop *loop,
                                  TcpFactory *factory,
-                                 uint32_t bind_addr,   // htonl(INADDR_ANY)
-                                 uint16_t bind_port,   // htons(9999)
-                                 uint32_t server_addr, // inet_addr("1.2.3.4")
-                                 uint16_t server_port, // htons(9999)
-                                 float    timeout)     // 5.3
-    : TcpWorker(loop, factory) {
+                                 tcp_client_worker_params_t *params)
+    : TcpWorker(loop, factory, params) {
 
     // Create
     if((sock = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK,
@@ -151,8 +154,8 @@ TcpClientWorker::TcpClientWorker(struct ev_loop *loop,
     struct sockaddr_in sa_bind;
     memset(&sa_bind, 0, sizeof(sa_bind));
     sa_bind.sin_family = AF_INET;
-    sa_bind.sin_port = bind_port;
-    sa_bind.sin_addr.s_addr = bind_addr;
+    sa_bind.sin_port = params->bind_port;
+    sa_bind.sin_addr.s_addr = params->bind_addr;
     if(bind(sock, (struct sockaddr*)&sa_bind, sizeof(sa_bind)) != 0) {
         perror("socket bind error");
         exit(EXIT_FAILURE);
@@ -162,8 +165,8 @@ TcpClientWorker::TcpClientWorker(struct ev_loop *loop,
     struct sockaddr_in sa_connect;
     memset(&sa_connect, 0, sizeof(sa_connect));
     sa_connect.sin_family = AF_INET;
-    sa_connect.sin_port = server_port;
-    sa_connect.sin_addr.s_addr = server_addr;
+    sa_connect.sin_port = params->server_port;
+    sa_connect.sin_addr.s_addr = params->server_addr;
     if(connect(sock, (struct sockaddr *)&sa_connect, sizeof(sa_connect)) < 0) {
         if(errno != EINPROGRESS) {
             perror("socket connect error");
@@ -171,10 +174,7 @@ TcpClientWorker::TcpClientWorker(struct ev_loop *loop,
         }
     }
 
-    // Initialize work
-    //work = new EchoStreamWork(sock);
-    //work = new RandomStreamWork(sock);
-    work = new HttpClientStreamWork(sock);
+    work = StreamWorkMaker::make(params, sock);
 
     // TODO(Janitha): connect_cb be read, write or both?
     // Hookup socket readable event

@@ -1,8 +1,8 @@
 CC=g++
 CFLAGS=-Wall -Wextra -g3
 LDFLAGS=
-LIBS=-lev
-SOURCES=flamethrower.cc stream_work.cc tcp_worker.cc tcp_factory.cc
+LIBS=-lev -lmsgpack
+SOURCES=flamethrower.cc flamethrower_params.cc stream_work.cc tcp_worker.cc tcp_factory.cc
 OBJECTS=$(SOURCES:.cc=.o)
 EXECUTABLE=flamethrower
 
