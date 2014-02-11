@@ -1,6 +1,7 @@
 #include "tcp_worker.h"
 
 
+////////////////////////////////////////////////////////////////////////////////
 TcpWorker::TcpWorker(struct ev_loop *loop,
                      TcpFactory *factory,
                      tcp_worker_params_t *params,
@@ -23,7 +24,7 @@ TcpWorker::~TcpWorker() {
 
 void TcpWorker::read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
 
-    printf("read_cb\n");
+    debug_print("called\n");
 
     TcpWorker *worker = (TcpWorker*)watcher->data;
 
@@ -48,14 +49,17 @@ void TcpWorker::read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents
 
     // Handle closing socket
     if(recvlen == 0) {
-        printf("client disconnected\n");
+
+        debug_socket_print(worker->sock, "disconnected\n");
+
         delete (TcpWorker*)worker; // TODO(Janitha): is this sane? what if the write side isn't done?
         return;
     }
 
     int hret;
     if((hret=worker->work->read_handler(recvbuf, recvlen)) < 0) {
-        printf("work read_handler error\n");
+
+        perror("work read_handler error");
         exit(EXIT_FAILURE);
         // TODO(Janitha): Shutdown socket and kill the worker
     }
@@ -65,6 +69,9 @@ void TcpWorker::read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents
     }
 
     if(hret == STREAMWORK_SHUTDOWN) {
+
+        debug_socket_print(worker->sock, "shutdown\n");
+
         ev_io_stop(loop, watcher);
         if(shutdown(worker->sock, SHUT_RDWR) < 0) {
             perror("socket shutdown error");
@@ -76,7 +83,7 @@ void TcpWorker::read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents
 
 void TcpWorker::write_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
 
-    printf("write_cb\n");
+    debug_print("called\n");
 
     TcpWorker *worker = (TcpWorker*)watcher->data;
 
@@ -95,7 +102,7 @@ void TcpWorker::write_cb(struct ev_loop *loop, struct ev_io *watcher, int revent
     int hret;
     if((hret = worker->work->write_handler(sendbuf, sendlen)) < 0) {
         // TODO(Janitha): Lets make this a bit more graceful
-        printf("work write_handler error\n");
+        perror("work write_handler error");
         exit(EXIT_FAILURE);
     }
 
@@ -111,13 +118,16 @@ void TcpWorker::write_cb(struct ev_loop *loop, struct ev_io *watcher, int revent
     }
 
     if(hret == STREAMWORK_SHUTDOWN) {
+
+        debug_socket_print(worker->sock, "shutdown-half\n");
+
         ev_io_stop(loop, watcher);
         shutdown(worker->sock, SHUT_WR);
         //delete (TcpWorker*)worker; // TODO(Janitha): is this sane? what is the read side isn't done?
     }
 }
 
-
+////////////////////////////////////////////////////////////////////////////////
 TcpServerWorker::TcpServerWorker(struct ev_loop *loop,
                                  TcpFactory *factory,
                                  tcp_server_worker_params_t *params,
@@ -131,19 +141,25 @@ TcpServerWorker::TcpServerWorker(struct ev_loop *loop,
     sock_r_ev.data = this;
     ev_io_init(&sock_r_ev, read_cb, sock, EV_READ);
     ev_io_start(factory->loop, &sock_r_ev);
-}
 
+    // Hookup socket writable event
+    sock_w_ev.data = this;
+    ev_io_init(&sock_w_ev, write_cb, sock, EV_WRITE);
+    ev_io_start(factory->loop, &sock_w_ev);
+}
 
 TcpServerWorker::~TcpServerWorker() {
 
 }
 
-
+////////////////////////////////////////////////////////////////////////////////
 TcpClientWorker::TcpClientWorker(struct ev_loop *loop,
                                  TcpFactory *factory,
                                  tcp_client_worker_params_t *params)
     : TcpWorker(loop, factory, params),
       params(params) {
+
+    debug_print("ctor\n");
 
     // Create
     if((sock = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK,
@@ -176,15 +192,17 @@ TcpClientWorker::TcpClientWorker(struct ev_loop *loop,
         }
     }
 
+    debug_socket_print(sock, "connecting\n");
+
     work = StreamWorkMaker::make(params, sock);
 
     // TODO(Janitha): connect_cb be read, write or both?
-    // Hookup socket readable event
+    // Hookup socket connected event
     sock_w_ev.data = this;
     ev_io_init(&sock_w_ev, connect_cb, sock, EV_READ|EV_WRITE);
     ev_io_start(factory->loop, &sock_w_ev);
 
-    /* TODO(Janitha): Re-enable this
+    /* TODO(Janitha): Implement the timeout_cb and reanable this
     // Hookup timeout event for socket
     sock_timeout.data = this;
     ev_timer_init(&sock_timeout, timeout_cb, timeout, 0);
@@ -202,7 +220,7 @@ void TcpClientWorker::connect_cb(struct ev_loop *loop,
                                  struct ev_io *watcher,
                                  int revents) {
 
-    printf("connect_cb\n");
+    debug_print("called\n");
 
     if(revents & EV_ERROR) {
         perror("invalid event");
@@ -223,12 +241,12 @@ void TcpClientWorker::connect_cb(struct ev_loop *loop,
     ev_timer_stop(loop, &worker->sock_timeout);
 
     if(error) {
-        printf("connect error: %s\n", strerror(error));
+        fprintf(stderr, "connect error: %s\n", strerror(error));
         delete (TcpClientWorker*)worker;
         return;
     }
 
-    printf("connection established\n");
+    debug_socket_print(worker->sock, "connection established\n");
 
     worker->sock_r_ev.data = worker;
     ev_io_init(&worker->sock_r_ev, read_cb, worker->sock, EV_READ);
@@ -244,7 +262,7 @@ void TcpClientWorker::timeout_cb(struct ev_loop *loop,
                                  struct ev_timer *watcher,
                                  int revents) {
 
-    printf("timeout_cb\n");
+    debug_print("timeout_cb\n");
 
     if(revents & EV_ERROR) {
         perror("invalid event");
@@ -252,4 +270,6 @@ void TcpClientWorker::timeout_cb(struct ev_loop *loop,
     }
 
     TcpClientWorker *worker = (TcpClientWorker*)watcher->data;
+
+    // TODO(Janitha): Implement the timeout logic and cleanup!!
 }

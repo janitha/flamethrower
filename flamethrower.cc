@@ -12,16 +12,25 @@ int main(int argc, char *argv[]) {
 
     flamethrower_params_t *params = flamethrower_params_from_file("client.msg");
 
+    /*
     params->factory.factory_type = factory_params_t::TCP_SERVER;
     params->factory.tcp_server.bind_addr = htonl(INADDR_ANY);
     params->factory.tcp_server.bind_port = htons(9999);
     params->factory.tcp_server.accept_backlog = 5;
     params->factory.tcp_server.server_worker.stream_work_type = tcp_worker_params_t::ECHO;
+    */
+
+    params->factory.factory_type = factory_params_t::TCP_CLIENT;
+    params->factory.tcp_client.client_worker.bind_addr = htonl(INADDR_ANY);
+    params->factory.tcp_client.client_worker.bind_port = htons(0);
+    params->factory.tcp_client.client_worker.server_addr = htonl(INADDR_LOOPBACK);
+    params->factory.tcp_client.client_worker.server_port = htons(5555);
+    params->factory.tcp_client.client_worker.stream_work_type = tcp_worker_params_t::ECHO;
+
 
     FactoryMaker::make(loop, &params->factory);
 
-
-    printf("Starting event loop\n");
+    debug_print("starting event loop\n");
 
     while(1) {
         ev_loop(loop, 0);

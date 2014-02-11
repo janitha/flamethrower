@@ -1,5 +1,5 @@
 CC=g++
-CFLAGS=-Wall -Wextra -g3
+CFLAGS=-Wall -Wunused -Wextra -g3 -std=c++0x -pedantic
 LDFLAGS=
 LIBS=-lev -lmsgpack
 SOURCES=flamethrower.cc flamethrower_params.cc stream_work.cc tcp_worker.cc tcp_factory.cc

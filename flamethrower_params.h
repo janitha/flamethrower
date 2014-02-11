@@ -21,7 +21,7 @@ typedef struct tcp_worker_params_t {
     enum {
         ECHO,
         RANDOM,
-        HTTP_CLIENT,
+        HTTP_CLIENT
     } stream_work_type;
     union {
         stream_work_echo_params_t echo_work;
@@ -60,7 +60,7 @@ typedef struct tcp_client_factory_params_t : tcp_factory_params_t {
 typedef struct factory_params_t {
     enum {
         TCP_SERVER,
-        TCP_CLIENT,
+        TCP_CLIENT
     } factory_type;
     union {
         tcp_server_factory_params_t tcp_server;

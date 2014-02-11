@@ -6,12 +6,15 @@
 void FactoryMaker::make(struct ev_loop *loop,
                         factory_params_t *params) {
 
-    if(params->factory_type == factory_params_t::TCP_SERVER) {
+    switch(params->factory_type) {
+    case factory_params_t::TCP_SERVER:
         new TcpServerFactory(loop, &params->tcp_server);
-    } else if(params->factory_type == factory_params_t::TCP_CLIENT) {
+        break;
+    case factory_params_t::TCP_CLIENT:
         new TcpClientFactory(loop, &params->tcp_client);
-    } else {
-        printf("invalid factory type\n");
+        break;
+    default:
+        perror("invalid factory type\n");
         exit(EXIT_FAILURE);
     }
     return;
@@ -33,7 +36,7 @@ TcpServerFactory::TcpServerFactory(struct ev_loop *loop,
     : TcpFactory(loop, params),
       params(params) {
 
-    printf("ctor tcpserverfactory\n");
+    debug_print("ctor\n");
 
     if((accept_sock = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK,
                              IPPROTO_TCP)) < 0) {
@@ -61,6 +64,8 @@ TcpServerFactory::TcpServerFactory(struct ev_loop *loop,
         exit(EXIT_FAILURE);
     }
 
+    debug_socket_print(accept_sock, "listning\n");
+
     // Init watcher
     accept_watcher.data = this;
     ev_io_init(&accept_watcher, accept_cb, accept_sock, EV_READ);
@@ -77,7 +82,7 @@ void TcpServerFactory::accept_cb(struct ev_loop *loop,
                                  struct ev_io *watcher,
                                  int revents) {
 
-    printf("accept_cb\n");
+    debug_print("called\n");
 
     TcpServerFactory *factory = (TcpServerFactory*)watcher->data;
 
@@ -101,7 +106,7 @@ void TcpServerFactory::accept_cb(struct ev_loop *loop,
             }
         }
 
-        printf("accepted connection from client\n");
+        debug_socket_print(client_sd, "accepted\n");
 
         // TODO(Janitha): factory should track workers to delete later on
         // TODO(Janitha): Have a function that dynamically generates workers
@@ -120,7 +125,7 @@ TcpClientFactory::TcpClientFactory(struct ev_loop *loop,
     : TcpFactory(loop, params),
       params(params) {
 
-    printf("ctor tcpclientfactory\n");
+    debug_print("ctor\n");
 
     TcpClientWorker *tcw = new TcpClientWorker(loop, this,
                                                &params->client_worker);

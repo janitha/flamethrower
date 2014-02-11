@@ -7,15 +7,6 @@ StreamWork* StreamWorkMaker::make(tcp_worker_params_t *params,
 
     StreamWork* work;
 
-    if(params->stream_work_type == tcp_worker_params_t::ECHO) {
-        printf("HERP DERP\n");
-    }
-
-    printf("%d\n", tcp_worker_params_t::ECHO);
-    printf("%d\n", tcp_worker_params_t::RANDOM);
-    printf("%d\n", tcp_worker_params_t::HTTP_CLIENT);
-    printf("%d\n", params->stream_work_type);
-
     switch(params->stream_work_type) {
     case tcp_worker_params_t::ECHO:
         work = new EchoStreamWork(&params->echo_work,
@@ -30,7 +21,7 @@ StreamWork* StreamWorkMaker::make(tcp_worker_params_t *params,
                                         sock);
         break;
     default:
-        printf("invalid stream_work_type\n");
+        perror("invalid stream_work_type\n");
         exit(EXIT_FAILURE);
     }
 
@@ -50,7 +41,7 @@ StreamWork::~StreamWork() {
 }
 
 int StreamWork::read_handler(char *recvbuf, ssize_t recvlen) {
-    printf("dumb:%s", recvbuf);
+    debug_print("dumb:%s", recvbuf);
     return recvlen;
 }
 
@@ -73,7 +64,7 @@ EchoStreamWork::~EchoStreamWork() {
 
 
 int EchoStreamWork::read_handler(char *recvbuf, ssize_t recvlen) {
-    printf("echo:%s", recvbuf);
+    debug_print("echo:%s", recvbuf);
 
     ssize_t sentsz;
 
@@ -126,7 +117,7 @@ int HttpClientStreamWork::write_handler(char *sendbuf, ssize_t &sendlen) {
         memcpy(sendbuf, mybuf, sizeof(mybuf));
     } else {
         // TODO(Janitha): Handle this gracefully by sending little by little
-        printf("Trickling data not implemented, this is a critical TODO\n");
+        perror("Trickling data not implemented, this is a critical TODO\n");
         exit(EXIT_FAILURE);
     }
 
