@@ -8,9 +8,8 @@
 #include "flamethrower_params.h"
 
 
-typedef std::map<std::string, msgpack::object> confmap_t;
-
-flamethrower_params_t* flamethrower_params_from_file(char* filename) {
+int flamethrower_params_from_file(char* filename, 
+                                  flamethrower_params_t *params) {
 
     /*
     // Read config file and unpack it
@@ -26,9 +25,5 @@ flamethrower_params_t* flamethrower_params_from_file(char* filename) {
     std::cout << confobj << std::endl;
     */
 
-
-    flamethrower_params_t *params = (flamethrower_params_t*)malloc(sizeof(flamethrower_params_t));
-    memset(params, 0, sizeof(flamethrower_params_t));
-
-    return params;
+    return 9;
 }

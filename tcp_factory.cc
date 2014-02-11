@@ -38,7 +38,11 @@ TcpFactory::TcpFactory(struct ev_loop *loop,
 }
 
 TcpFactory::~TcpFactory() {
+
     ev_timer_stop(loop, &stats_timer);
+
+    // TODO(Janitha): Free the workers
+
 }
 
 void TcpFactory::factory_cb(struct ev_loop *loop,
@@ -88,7 +92,10 @@ TcpServerFactory::TcpServerFactory(struct ev_loop *loop,
     }
 
     int optval1 = 1;
-    setsockopt(accept_sock, SOL_SOCKET, SO_REUSEADDR, &optval1, sizeof(optval1));
+    if(setsockopt(accept_sock, SOL_SOCKET, SO_REUSEADDR, &optval1, sizeof(optval1)) < 0) {
+        perror("setsockopt error");
+        exit(EXIT_FAILURE);
+    }
 
     // Bind
     struct sockaddr_in sa_in;
@@ -118,6 +125,7 @@ TcpServerFactory::TcpServerFactory(struct ev_loop *loop,
 
 
 TcpServerFactory::~TcpServerFactory() {
+    // TODO(Janitha): Free the workers
 }
 
 
@@ -158,7 +166,6 @@ void TcpServerFactory::accept_cb(struct ev_loop *loop,
                                                       factory,
                                                       &factory->params->server_worker,
                                                       client_sd);
-
     }
 }
 
@@ -192,4 +199,5 @@ void TcpClientFactory::factory_cb() {
 
 
 TcpClientFactory::~TcpClientFactory() {
+    // TODO(Janitha): Free the workers
 }

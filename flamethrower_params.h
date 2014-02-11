@@ -30,7 +30,7 @@ typedef struct tcp_worker_params_t {
         stream_work_random_params_t random_work;
         stream_work_httpclient_params_t httpclient_work;
     };
-    bool dont_linger;
+    bool linger;
 } tcp_worker_params_t;
 
 typedef struct tcp_server_worker_params_t : public tcp_worker_params_t {
@@ -46,6 +46,7 @@ typedef struct tcp_client_worker_params_t : public tcp_worker_params_t {
 
 ////////////////////////////////////////////////////////////////////////////////
 typedef struct tcp_factory_params_t{
+    uint64_t count;
 } tcp_factory_params_t;
 
 typedef struct tcp_server_factory_params_t : tcp_factory_params_t {
@@ -79,6 +80,7 @@ typedef struct {
 } flamethrower_params_t;
 
 ////////////////////////////////////////////////////////////////////////////////
-flamethrower_params_t* flamethrower_params_from_file(char* filename);
+int flamethrower_params_from_file(char* filename,
+                                  flamethrower_params_t *params);
 
 #endif

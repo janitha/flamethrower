@@ -11,8 +11,6 @@ TcpWorker::TcpWorker(struct ev_loop *loop,
       factory(factory),
       sock(sock) {
 
-    debug_print("ctor\n");
-
     factory->workers.push_back(this);
 
     // TODO(Janitha): Does a new TCP worker need to invoke the factory async?
@@ -22,32 +20,20 @@ TcpWorker::TcpWorker(struct ev_loop *loop,
 
 
 TcpWorker::~TcpWorker() {
-    debug_print("dtor\n");
 
     ev_io_stop(loop, &sock_r_ev);
     ev_io_stop(loop, &sock_w_ev);
+
     if(work) {
         delete work;
     }
 
-    factory->workers.remove(this);
-    ev_async_send(loop, &factory->factory_async);
-}
-
-void TcpWorker::set_sock_opts() {
-
-    // Set common sockopts
-    if(params->dont_linger) {
-        struct linger lingerval;
-        memset(&lingerval, 0, sizeof(lingerval));
-        lingerval.l_onoff = 0;
-        lingerval.l_linger = 0;
-        if(setsockopt(sock, SOL_SOCKET, SO_LINGER, &lingerval, sizeof(lingerval)) < 0) {
-            perror("setsockopt error");
-            exit(EXIT_FAILURE);
-        }
+    if(close(sock) < 0) {
+        perror("socket close error");
     }
 
+    factory->workers.remove(this);
+    ev_async_send(loop, &factory->factory_async);
 }
 
 void TcpWorker::read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
@@ -163,6 +149,21 @@ TcpServerWorker::TcpServerWorker(struct ev_loop *loop,
     : TcpWorker(loop, factory, params, sock),
       params(params) {
 
+    debug_print("ctor\n");
+
+    // Set linger behavior
+    if(params->linger) {
+        struct linger lingerval;
+        memset(&lingerval, 0, sizeof(lingerval));
+        lingerval.l_onoff = 0;
+        lingerval.l_linger = 0;
+        if(setsockopt(sock, SOL_SOCKET, SO_LINGER, &lingerval, sizeof(lingerval)) < 0) {
+            perror("setsockopt error");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    // Create a worker
     work = StreamWorkMaker::make(params, sock);
 
     // Hookup socket readable event
@@ -177,6 +178,8 @@ TcpServerWorker::TcpServerWorker(struct ev_loop *loop,
 }
 
 TcpServerWorker::~TcpServerWorker() {
+
+    debug_print("dtor\n");
 
     if(shutdown(sock, SHUT_RDWR) == -1) {
         perror("socket shutdown error");
@@ -203,7 +206,17 @@ TcpClientWorker::TcpClientWorker(struct ev_loop *loop,
         exit(EXIT_FAILURE);
     }
 
-    set_sock_opts();
+    // Set linger behavior
+    if(params->linger) {
+        struct linger lingerval;
+        memset(&lingerval, 0, sizeof(lingerval));
+        lingerval.l_onoff = 0;
+        lingerval.l_linger = 0;
+        if(setsockopt(sock, SOL_SOCKET, SO_LINGER, &lingerval, sizeof(lingerval)) < 0) {
+            perror("setsockopt error");
+            exit(EXIT_FAILURE);
+        }
+    }
 
     // Bind to local
     struct sockaddr_in sa_bind;
@@ -249,6 +262,7 @@ TcpClientWorker::TcpClientWorker(struct ev_loop *loop,
 
 
 TcpClientWorker::~TcpClientWorker() {
+    debug_print("dtor\n");
     ev_timer_stop(loop, &sock_timeout);
 }
 

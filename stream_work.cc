@@ -9,16 +9,13 @@ StreamWork* StreamWorkMaker::make(tcp_worker_params_t *params,
 
     switch(params->stream_work_type) {
     case tcp_worker_params_t::ECHO:
-        work = new EchoStreamWork(&params->echo_work,
-                                  sock);
+        work = new EchoStreamWork(&params->echo_work, sock);
         break;
     case tcp_worker_params_t::RANDOM:
-        work = new RandomStreamWork(&params->random_work,
-                                    sock);
+        work = new RandomStreamWork(&params->random_work, sock);
         break;
     case tcp_worker_params_t::HTTP_CLIENT:
-        work = new HttpClientStreamWork(&params->httpclient_work,
-                                        sock);
+        work = new HttpClientStreamWork(&params->httpclient_work, sock);
         break;
     default:
         perror("invalid stream_work_type\n");
