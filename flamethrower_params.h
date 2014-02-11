@@ -10,7 +10,9 @@ typedef struct stream_work_params_t {
 typedef struct stream_work_echo_params_t : public stream_work_params_t {
 } stream_work_echo_params_t;
 
-typedef struct stream_work_random_params_t : public stream_work_echo_params_t {
+typedef struct stream_work_random_params_t : public stream_work_params_t {
+    uint64_t bytes;
+    bool shutdown;
 } stream_work_random_params_t;
 
 typedef struct stream_work_httpclient_params_t : public stream_work_params_t {
@@ -28,6 +30,7 @@ typedef struct tcp_worker_params_t {
         stream_work_random_params_t random_work;
         stream_work_httpclient_params_t httpclient_work;
     };
+    bool dont_linger;
 } tcp_worker_params_t;
 
 typedef struct tcp_server_worker_params_t : public tcp_worker_params_t {
@@ -53,6 +56,7 @@ typedef struct tcp_server_factory_params_t : tcp_factory_params_t {
 } tcp_server_factory_params_t;
 
 typedef struct tcp_client_factory_params_t : tcp_factory_params_t {
+    uint32_t concurrency;
     tcp_client_worker_params_t client_worker;
 } tcp_client_factory_params_t;
 

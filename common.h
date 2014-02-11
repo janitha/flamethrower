@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <list>
 #include <map>
 
 #include <cstdio>

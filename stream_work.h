@@ -50,8 +50,9 @@ public:
 ////////////////////////////////////////////////////////////////////////////////
 // Random sender and echo work
 ////////////////////////////////////////////////////////////////////////////////
-class RandomStreamWork : public EchoStreamWork {
+class RandomStreamWork : public StreamWork {
     stream_work_random_params_t *params;
+    uint64_t bytes_remaining;
 public:
     RandomStreamWork(stream_work_random_params_t *params,
                      int sock);

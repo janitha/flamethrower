@@ -24,11 +24,19 @@ public:
 class TcpFactory {
 private:
     tcp_factory_params_t *params;
-    // TODO(Janitha): keep track of workers
+    struct ev_timer stats_timer;
 public:
     struct ev_loop *loop;
+    struct ev_async factory_async;
+    std::list<TcpWorker*> workers;
+
     TcpFactory(struct ev_loop *loop, tcp_factory_params_t *params);
     virtual ~TcpFactory();
+
+    static void factory_cb(struct ev_loop *loop, struct ev_async *watcher, int revent);
+    virtual void factory_cb();
+
+    static void stats_cb(struct ev_loop *loop, struct ev_timer *watcher, int revents);
 };
 
 
@@ -45,6 +53,9 @@ public:
     TcpServerFactory(struct ev_loop *loop,
                      tcp_server_factory_params_t *params);
     virtual ~TcpServerFactory();
+
+    virtual void factory_cb();
+
     static void accept_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
 };
 
@@ -60,6 +71,7 @@ public:
                      tcp_client_factory_params_t *params);
     virtual ~TcpClientFactory();
 
+    virtual void factory_cb();
 };
 
 

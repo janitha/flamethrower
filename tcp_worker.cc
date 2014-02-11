@@ -10,17 +10,45 @@ TcpWorker::TcpWorker(struct ev_loop *loop,
       loop(loop),
       factory(factory),
       sock(sock) {
+
+    debug_print("ctor\n");
+
+    factory->workers.push_back(this);
+
+    // TODO(Janitha): Does a new TCP worker need to invoke the factory async?
+    // ev_async_send(loop, &factory->factory_async);
+
 }
 
 
 TcpWorker::~TcpWorker() {
+    debug_print("dtor\n");
+
     ev_io_stop(loop, &sock_r_ev);
     ev_io_stop(loop, &sock_w_ev);
     if(work) {
         delete work;
     }
+
+    factory->workers.remove(this);
+    ev_async_send(loop, &factory->factory_async);
 }
 
+void TcpWorker::set_sock_opts() {
+
+    // Set common sockopts
+    if(params->dont_linger) {
+        struct linger lingerval;
+        memset(&lingerval, 0, sizeof(lingerval));
+        lingerval.l_onoff = 0;
+        lingerval.l_linger = 0;
+        if(setsockopt(sock, SOL_SOCKET, SO_LINGER, &lingerval, sizeof(lingerval)) < 0) {
+            perror("setsockopt error");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+}
 
 void TcpWorker::read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
 
@@ -150,6 +178,13 @@ TcpServerWorker::TcpServerWorker(struct ev_loop *loop,
 
 TcpServerWorker::~TcpServerWorker() {
 
+    if(shutdown(sock, SHUT_RDWR) == -1) {
+        perror("socket shutdown error");
+    }
+    if(close(sock) == -1) {
+        perror("socket close error");
+    }
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -167,6 +202,8 @@ TcpClientWorker::TcpClientWorker(struct ev_loop *loop,
         perror("socket error");
         exit(EXIT_FAILURE);
     }
+
+    set_sock_opts();
 
     // Bind to local
     struct sockaddr_in sa_bind;
@@ -202,12 +239,12 @@ TcpClientWorker::TcpClientWorker(struct ev_loop *loop,
     ev_io_init(&sock_w_ev, connect_cb, sock, EV_READ|EV_WRITE);
     ev_io_start(factory->loop, &sock_w_ev);
 
-    /* TODO(Janitha): Implement the timeout_cb and reanable this
+    // TODO(Janitha): Implement the timeout_cb and reanable this
     // Hookup timeout event for socket
     sock_timeout.data = this;
-    ev_timer_init(&sock_timeout, timeout_cb, timeout, 0);
-    ev_timer_start(loop, &sock_timeout);
-    */
+    ev_timer_init(&sock_timeout, timeout_cb, params->timeout, 0);
+    //ev_timer_start(loop, &sock_timeout);
+
 }
 
 

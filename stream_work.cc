@@ -34,7 +34,6 @@ StreamWork::StreamWork(stream_work_params_t *params,
                        int sock)
     : params(params),
       sock(sock) {
-
 }
 
 StreamWork::~StreamWork() {
@@ -78,8 +77,9 @@ int EchoStreamWork::read_handler(char *recvbuf, ssize_t recvlen) {
 ////////////////////////////////////////////////////////////////////////////////
 RandomStreamWork::RandomStreamWork(stream_work_random_params_t *params,
                                    int sock)
-    : EchoStreamWork(params, sock),
-      params(params) {
+    : StreamWork(params, sock),
+      params(params),
+      bytes_remaining(params->bytes) {
 }
 
 
@@ -89,12 +89,24 @@ RandomStreamWork::~RandomStreamWork() {
 
 int RandomStreamWork::write_handler(char *sendbuf, ssize_t &sendlen) {
 
+    if(bytes_remaining <= sendlen) {
+        sendlen = bytes_remaining;
+    }
+    bytes_remaining -= sendlen;
+
     for(int i=0; i<sendlen; i++) {
         // Randomize just printable ascii chars
         sendbuf[i] = '!' + (std::rand()%93);
     }
 
-    return STREAMWORK_FINISHED;
+    if(!bytes_remaining) {
+        if(params->shutdown) {
+            return STREAMWORK_SHUTDOWN;
+        } else {
+            return STREAMWORK_FINISHED;
+        }
+    }
+    return STREAMWORK_CONTINUE;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

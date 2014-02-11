@@ -28,6 +28,9 @@ public:
     TcpWorker(struct ev_loop *loop, TcpFactory* factory,
               tcp_worker_params_t *params, int sock=-1);
     virtual ~TcpWorker();
+
+    virtual void set_sock_opts();
+
     static void read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
     static void write_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
 };
@@ -58,6 +61,7 @@ public:
                     TcpFactory *factory,
                     tcp_client_worker_params_t *params);
     virtual ~TcpClientWorker();
+
     static void connect_cb(struct ev_loop *loop, struct ev_io *watcher,int revents);
     static void timeout_cb(struct ev_loop *loop, struct ev_timer *watcher, int revents);
 };

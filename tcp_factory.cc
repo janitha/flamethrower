@@ -25,10 +25,53 @@ TcpFactory::TcpFactory(struct ev_loop *loop,
                        tcp_factory_params_t *params)
     : params(params),
       loop(loop) {
+
+    stats_timer.data = this;
+    ev_timer_init(&stats_timer, stats_cb, 0, 1.0);
+    ev_timer_start(loop, &stats_timer);
+
+    factory_async.data = this;
+    ev_async_init(&factory_async, factory_cb);
+    ev_async_start(loop, &factory_async);
+
+    ev_async_send(loop, &factory_async);
 }
 
 TcpFactory::~TcpFactory() {
+    ev_timer_stop(loop, &stats_timer);
 }
+
+void TcpFactory::factory_cb(struct ev_loop *loop,
+                            struct ev_async *watcher,
+                            int revents) {
+    debug_print("called\n");
+    if(revents & EV_ERROR) {
+        perror("invalid event");
+        return;
+    }
+
+    TcpFactory *factory = (TcpFactory*)watcher->data;
+    factory->factory_cb();
+
+}
+
+void TcpFactory::factory_cb() {
+
+}
+
+void TcpFactory::stats_cb(struct ev_loop *loop,
+                          struct ev_timer *watcher,
+                          int revents) {
+
+    if(revents & EV_ERROR) {
+        perror("invalid event");
+        return;
+    }
+
+    TcpFactory* factory = (TcpFactory*)watcher->data;
+
+    debug_print("workers: %d\n", factory->workers.size());
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 TcpServerFactory::TcpServerFactory(struct ev_loop *loop,
@@ -119,6 +162,12 @@ void TcpServerFactory::accept_cb(struct ev_loop *loop,
     }
 }
 
+void TcpServerFactory::factory_cb() {
+
+    debug_print("called\n");
+
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 TcpClientFactory::TcpClientFactory(struct ev_loop *loop,
                                    tcp_client_factory_params_t *params)
@@ -127,8 +176,17 @@ TcpClientFactory::TcpClientFactory(struct ev_loop *loop,
 
     debug_print("ctor\n");
 
-    TcpClientWorker *tcw = new TcpClientWorker(loop, this,
-                                               &params->client_worker);
+}
+
+void TcpClientFactory::factory_cb() {
+
+    debug_print("called\n");
+
+    while(workers.size() <= params->concurrency) {
+        TcpClientWorker *tcw = new TcpClientWorker(loop,
+                                                   this,
+                                                   &params->client_worker);
+    }
 
 }
 
