@@ -63,7 +63,8 @@ int StreamWork::write_handler(char *sendbuf, ssize_t &sendlen) {
 ////////////////////////////////////////////////////////////////////////////////
 EchoStreamWork::EchoStreamWork(stream_work_echo_params_t *params,
                                int sock)
-    : StreamWork(params, sock) {
+    : StreamWork(params, sock),
+      params(params) {
 }
 
 
@@ -86,7 +87,8 @@ int EchoStreamWork::read_handler(char *recvbuf, ssize_t recvlen) {
 ////////////////////////////////////////////////////////////////////////////////
 RandomStreamWork::RandomStreamWork(stream_work_random_params_t *params,
                                    int sock)
-    : EchoStreamWork(params, sock) {
+    : EchoStreamWork(params, sock),
+      params(params) {
 }
 
 
@@ -107,7 +109,8 @@ int RandomStreamWork::write_handler(char *sendbuf, ssize_t &sendlen) {
 ////////////////////////////////////////////////////////////////////////////////
 HttpClientStreamWork::HttpClientStreamWork(stream_work_httpclient_params_t *params,
                                            int sock)
-    : StreamWork(params, sock) {
+    : StreamWork(params, sock),
+      params(params) {
 }
 
 

@@ -122,7 +122,8 @@ TcpServerWorker::TcpServerWorker(struct ev_loop *loop,
                                  TcpFactory *factory,
                                  tcp_server_worker_params_t *params,
                                  int sock)
-    : TcpWorker(loop, factory, params, sock) {
+    : TcpWorker(loop, factory, params, sock),
+      params(params) {
 
     work = StreamWorkMaker::make(params, sock);
 
@@ -141,7 +142,8 @@ TcpServerWorker::~TcpServerWorker() {
 TcpClientWorker::TcpClientWorker(struct ev_loop *loop,
                                  TcpFactory *factory,
                                  tcp_client_worker_params_t *params)
-    : TcpWorker(loop, factory, params) {
+    : TcpWorker(loop, factory, params),
+      params(params) {
 
     // Create
     if((sock = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK,

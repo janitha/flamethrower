@@ -30,7 +30,8 @@ TcpFactory::~TcpFactory() {
 ////////////////////////////////////////////////////////////////////////////////
 TcpServerFactory::TcpServerFactory(struct ev_loop *loop,
                                    tcp_server_factory_params_t *params)
-    : TcpFactory(loop, params) {
+    : TcpFactory(loop, params),
+      params(params) {
 
     printf("ctor tcpserverfactory\n");
 
@@ -116,7 +117,8 @@ void TcpServerFactory::accept_cb(struct ev_loop *loop,
 ////////////////////////////////////////////////////////////////////////////////
 TcpClientFactory::TcpClientFactory(struct ev_loop *loop,
                                    tcp_client_factory_params_t *params)
-    : TcpFactory(loop, params) {
+    : TcpFactory(loop, params),
+      params(params) {
 
     printf("ctor tcpclientfactory\n");
 
