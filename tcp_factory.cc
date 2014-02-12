@@ -23,8 +23,8 @@ void FactoryMaker::make(struct ev_loop *loop,
 ////////////////////////////////////////////////////////////////////////////////
 TcpFactory::TcpFactory(struct ev_loop *loop,
                        tcp_factory_params_t *params)
-    : params(params),
-      loop(loop) {
+    : loop(loop),
+      params(params) {
 
     stats_timer.data = this;
     ev_timer_init(&stats_timer, stats_cb, 0, 1.0);
@@ -53,29 +53,37 @@ void TcpFactory::factory_cb(struct ev_loop *loop,
         perror("invalid event");
         return;
     }
-
-    TcpFactory *factory = (TcpFactory*)watcher->data;
+    TcpFactory* factory = (TcpFactory*)watcher->data;
     factory->factory_cb();
-
 }
 
 void TcpFactory::factory_cb() {
-
 }
 
 void TcpFactory::stats_cb(struct ev_loop *loop,
                           struct ev_timer *watcher,
                           int revents) {
-
     if(revents & EV_ERROR) {
         perror("invalid event");
         return;
     }
-
     TcpFactory* factory = (TcpFactory*)watcher->data;
+    factory->stats_cb();
+}
 
-    debug_print("workers: %d\n", factory->workers.size());
-};
+void TcpFactory::stats_cb() {
+    debug_print("workers: %d\n", workers.size());
+}
+
+void TcpFactory::worker_new_cb(TcpWorker *worker) {
+    workers.push_back(worker);
+    worker->workers_it = --workers.end();
+}
+
+void TcpFactory::worker_delete_cb(TcpWorker *worker) {
+    workers.erase(worker->workers_it);
+    ev_async_send(loop, &factory_async);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 TcpServerFactory::TcpServerFactory(struct ev_loop *loop,
@@ -84,6 +92,18 @@ TcpServerFactory::TcpServerFactory(struct ev_loop *loop,
       params(params) {
 
     debug_print("ctor\n");
+
+    start_listening();
+
+    accept_watcher.data = this;
+    ev_io_init(&accept_watcher, accept_cb, accept_sock, EV_READ);
+}
+
+TcpServerFactory::~TcpServerFactory() {
+    // TODO(Janitha): Free the workers
+}
+
+void TcpServerFactory::start_listening() {
 
     if((accept_sock = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK,
                              IPPROTO_TCP)) < 0) {
@@ -116,63 +136,55 @@ TcpServerFactory::TcpServerFactory(struct ev_loop *loop,
 
     debug_socket_print(accept_sock, "listning\n");
 
-    // Init watcher
-    accept_watcher.data = this;
-    ev_io_init(&accept_watcher, accept_cb, accept_sock, EV_READ);
-    ev_io_start(loop, &accept_watcher);
-
 }
-
-
-TcpServerFactory::~TcpServerFactory() {
-    // TODO(Janitha): Free the workers
-}
-
 
 void TcpServerFactory::accept_cb(struct ev_loop *loop,
                                  struct ev_io *watcher,
                                  int revents) {
-
     debug_print("called\n");
-
-    TcpServerFactory *factory = (TcpServerFactory*)watcher->data;
 
     if(revents & EV_ERROR) {
         perror("invalid event");
         return;
     }
 
+    TcpServerFactory *factory = (TcpServerFactory*)watcher->data;
+    factory->accept_cb();
+}
+
+void TcpServerFactory::accept_cb() {
+
     int client_sd;
 
-    for(;;) {
-
-        // Accept client request
-        if((client_sd = accept(watcher->fd, 0, 0)) < 0) {
-            if(errno == EWOULDBLOCK || errno == EAGAIN) {
-                // Expected behavior for non-blocking io
-                break;
-            } else {
-                perror("socket accept error");
-                return;
-            }
-        }
-
-        debug_socket_print(client_sd, "accepted\n");
-
-        // TODO(Janitha): factory should track workers to delete later on
-        // TODO(Janitha): Have a function that dynamically generates workers
-
-        TcpServerWorker *worker = new TcpServerWorker(loop,
-                                                      factory,
-                                                      &factory->params->server_worker,
-                                                      client_sd);
+    if(workers.size() >= params->concurrency) {
+        debug_print("stopping accept_watcher\n");
+        ev_io_stop(loop, &accept_watcher);
+        return;
     }
+
+    // Accept client request
+    if((client_sd = accept(accept_sock, 0, 0)) < 0) {
+        if(errno == EWOULDBLOCK || errno == EAGAIN) {
+            // Expected behavior for non-blocking io
+            return;
+        } else {
+            perror("socket accept error");
+            return;
+        }
+    }
+
+    debug_socket_print(client_sd, "accepted\n");
+
+    TcpServerWorker *worker = new TcpServerWorker(loop, this,
+                                                  &params->server_worker,
+                                                  client_sd);
 }
 
 void TcpServerFactory::factory_cb() {
 
     debug_print("called\n");
 
+    ev_io_start(loop, &accept_watcher);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -189,14 +201,19 @@ void TcpClientFactory::factory_cb() {
 
     debug_print("called\n");
 
-    while(workers.size() <= params->concurrency) {
-        TcpClientWorker *tcw = new TcpClientWorker(loop,
-                                                   this,
-                                                   &params->client_worker);
+    if(workers.size() >= params->concurrency) {
+        return;
     }
 
+    create_connection();
+    ev_async_send(loop, &factory_async);
 }
 
+void TcpClientFactory::create_connection() {
+
+    TcpClientWorker *tcw = new TcpClientWorker(loop, this,
+                                               &params->client_worker);
+}
 
 TcpClientFactory::~TcpClientFactory() {
     // TODO(Janitha): Free the workers

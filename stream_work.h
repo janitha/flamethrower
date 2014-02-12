@@ -2,6 +2,7 @@
 #define STREAM_WORK_H
 
 #include "common.h"
+#include "tcp_worker.h"
 
 #define STREAMWORK_SHUTDOWN  2
 #define STREAMWORK_FINISHED  1
@@ -29,8 +30,10 @@ public:
     StreamWork(stream_work_params_t *params,
                int sock);
     virtual ~StreamWork();
-    virtual int read_handler(char *recvbuf, ssize_t recvlen);
-    virtual int write_handler(char *sendbuf, ssize_t &sendlen);
+    virtual int handler(char *recvbuf, size_t recvlen,
+                        char *sendbuf, size_t &sendlen);
+    virtual int read_handler(char *recvbuf, size_t recvlen);
+    virtual int write_handler(char *sendbuf, size_t &sendlen);
 };
 
 
@@ -43,7 +46,8 @@ public:
     EchoStreamWork(stream_work_echo_params_t *params,
                    int sock);
     virtual ~EchoStreamWork();
-    virtual int read_handler(char *recvbuf, ssize_t recvlen);
+    virtual int handler(char *recvbuf, size_t recvlen,
+                        char *sendbuf, size_t &sendlen);
 };
 
 
@@ -57,7 +61,7 @@ public:
     RandomStreamWork(stream_work_random_params_t *params,
                      int sock);
     virtual ~RandomStreamWork();
-    virtual int write_handler(char *sendbuf, ssize_t &sendlen);
+    virtual int write_handler(char *sendbuf, size_t &sendlen);
 };
 
 
@@ -70,7 +74,7 @@ public:
     HttpClientStreamWork(stream_work_httpclient_params_t *params,
                          int sock);
     virtual ~HttpClientStreamWork();
-    virtual int write_handler(char *sendbuf, ssize_t &sendlen);
+    virtual int write_handler(char *sendbuf, size_t &sendlen);
 };
 
 

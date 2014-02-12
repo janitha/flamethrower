@@ -8,7 +8,7 @@
 #include "flamethrower_params.h"
 
 
-int flamethrower_params_from_file(char* filename, 
+int flamethrower_params_from_file(char* filename,
                                   flamethrower_params_t *params) {
 
     /*

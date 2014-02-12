@@ -26,26 +26,22 @@ typedef struct tcp_worker_params_t {
         HTTP_CLIENT
     } stream_work_type;
     union {
-        stream_work_echo_params_t echo_work;
-        stream_work_random_params_t random_work;
+        stream_work_echo_params_t       echo_work;
+        stream_work_random_params_t     random_work;
         stream_work_httpclient_params_t httpclient_work;
     };
-    bool linger;
+    bool linger; // immediately release the socket after closing (SO_LINGER)
 } tcp_worker_params_t;
 
 typedef struct tcp_server_worker_params_t : public tcp_worker_params_t {
 } tcp_server_worker_params_t;
 
 typedef struct tcp_client_worker_params_t : public tcp_worker_params_t {
-    uint32_t bind_addr;       // htonl(INADDRY_ANY)
-    uint16_t bind_port;       // htons(0)
-    uint32_t server_addr;     // htonl or inet_addr("1.2.3.4")
-    uint16_t server_port;     // htons(12345)
-    float    timeout;         // 5.0
 } tcp_client_worker_params_t;
 
 ////////////////////////////////////////////////////////////////////////////////
 typedef struct tcp_factory_params_t{
+    uint32_t concurrency;
     uint64_t count;
 } tcp_factory_params_t;
 
@@ -57,7 +53,11 @@ typedef struct tcp_server_factory_params_t : tcp_factory_params_t {
 } tcp_server_factory_params_t;
 
 typedef struct tcp_client_factory_params_t : tcp_factory_params_t {
-    uint32_t concurrency;
+    uint32_t bind_addr;       // htonl(INADDRY_ANY)
+    uint16_t bind_port;       // htons(0)
+    uint32_t server_addr;     // htonl or inet_addr("1.2.3.4")
+    uint16_t server_port;     // htons(12345)
+    float    connect_timeout; // 5.0
     tcp_client_worker_params_t client_worker;
 } tcp_client_factory_params_t;
 

@@ -3,6 +3,9 @@
 #include <string>
 #include <list>
 #include <map>
+#include <queue>
+#include <utility>
+#include <algorithm>
 
 #include <cstdio>
 #include <cstdlib>

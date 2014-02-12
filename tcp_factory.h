@@ -23,20 +23,21 @@ public:
 ////////////////////////////////////////////////////////////////////////////////
 class TcpFactory {
 private:
-    tcp_factory_params_t *params;
     struct ev_timer stats_timer;
 public:
     struct ev_loop *loop;
+    tcp_factory_params_t *params;
     struct ev_async factory_async;
     std::list<TcpWorker*> workers;
 
     TcpFactory(struct ev_loop *loop, tcp_factory_params_t *params);
     virtual ~TcpFactory();
-
-    static void factory_cb(struct ev_loop *loop, struct ev_async *watcher, int revent);
+    virtual void worker_new_cb(TcpWorker *worker);
+    virtual void worker_delete_cb(TcpWorker *worker);
+    static void  factory_cb(struct ev_loop *loop, struct ev_async *watcher, int revent);
     virtual void factory_cb();
-
-    static void stats_cb(struct ev_loop *loop, struct ev_timer *watcher, int revents);
+    static void  stats_cb(struct ev_loop *loop, struct ev_timer *watcher, int revents);
+    virtual void stats_cb();
 };
 
 
@@ -46,17 +47,16 @@ public:
 ////////////////////////////////////////////////////////////////////////////////
 class TcpServerFactory : public TcpFactory {
 private:
-    tcp_server_factory_params_t *params;
     int accept_sock;
     struct ev_io accept_watcher;
 public:
-    TcpServerFactory(struct ev_loop *loop,
-                     tcp_server_factory_params_t *params);
+    tcp_server_factory_params_t *params;
+    TcpServerFactory(struct ev_loop *loop, tcp_server_factory_params_t *params);
     virtual ~TcpServerFactory();
-
+    virtual void start_listening();
     virtual void factory_cb();
-
     static void accept_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
+    virtual void accept_cb();
 };
 
 
@@ -65,12 +65,11 @@ public:
 ////////////////////////////////////////////////////////////////////////////////
 class TcpClientFactory : public TcpFactory {
 private:
-    tcp_client_factory_params_t *params;
 public:
-    TcpClientFactory(struct ev_loop *loop,
-                     tcp_client_factory_params_t *params);
+    tcp_client_factory_params_t *params;
+    TcpClientFactory(struct ev_loop *loop, tcp_client_factory_params_t *params);
     virtual ~TcpClientFactory();
-
+    virtual void create_connection();
     virtual void factory_cb();
 };
 

@@ -7,6 +7,9 @@
 #include "stream_work.h"
 
 class TcpFactory;
+class TcpServerFactory;
+class TcpClientFactory;
+class StreamWork;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Base class for TcpWorkers
@@ -25,12 +28,17 @@ protected:
     struct ev_io sock_r_ev;
     struct ev_io sock_w_ev;
 public:
+    std::list<TcpWorker*>::iterator workers_it;
+
     TcpWorker(struct ev_loop *loop, TcpFactory* factory,
               tcp_worker_params_t *params, int sock=-1);
     virtual ~TcpWorker();
 
     static void read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
+    virtual void read_cb();
+
     static void write_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
+    virtual void write_cb();
 };
 
 
@@ -41,7 +49,7 @@ class TcpServerWorker : public TcpWorker {
 private:
     tcp_server_worker_params_t *params;
 public:
-    TcpServerWorker(struct ev_loop *loop, TcpFactory *factory,
+    TcpServerWorker(struct ev_loop *loop, TcpServerFactory *factory,
                     tcp_server_worker_params_t *params, int sock);
     virtual ~TcpServerWorker();
 };
@@ -56,12 +64,15 @@ private:
     struct ev_timer sock_timeout;
 public:
     TcpClientWorker(struct ev_loop *loop,
-                    TcpFactory *factory,
+                    TcpClientFactory *factory,
                     tcp_client_worker_params_t *params);
     virtual ~TcpClientWorker();
 
     static void connect_cb(struct ev_loop *loop, struct ev_io *watcher,int revents);
+    virtual void connect_cb();
+
     static void timeout_cb(struct ev_loop *loop, struct ev_timer *watcher, int revents);
+    virtual void timeout_cb();
 };
 
 

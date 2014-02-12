@@ -36,13 +36,34 @@ StreamWork::StreamWork(stream_work_params_t *params,
 StreamWork::~StreamWork() {
 }
 
-int StreamWork::read_handler(char *recvbuf, ssize_t recvlen) {
-    debug_print("dumb:%s", recvbuf);
-    return recvlen;
+int StreamWork::handler(char *recvbuf, size_t recvlen,
+                        char *sendbuf, size_t &sendlen) {
+    int rret, wret;
+
+    if(recvbuf) {
+        if((rret = read_handler(recvbuf, recvlen)) < 0) {
+            perror("read handler error");
+            exit(EXIT_FAILURE);
+        }
+    }
+    if(sendbuf) {
+        if((wret = write_handler(sendbuf, sendlen)) < 0) {
+            perror("write handler error");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    // TODO(Janitha): Is this the returning the highest code right?
+    return std::max<int>(rret, wret);
+
 }
 
+int StreamWork::read_handler(char *recvbuf, size_t recvlen) {
+    debug_print("dumb:%s", recvbuf);
+    return STREAMWORK_FINISHED;
+}
 
-int StreamWork::write_handler(char *sendbuf, ssize_t &sendlen) {
+int StreamWork::write_handler(char *sendbuf, size_t &sendlen) {
     sendlen = 0;
     return STREAMWORK_FINISHED;
 }
@@ -59,14 +80,28 @@ EchoStreamWork::~EchoStreamWork() {
 }
 
 
-int EchoStreamWork::read_handler(char *recvbuf, ssize_t recvlen) {
+int EchoStreamWork::handler(char *recvbuf, size_t recvlen,
+                            char *sendbuf, size_t &sendlen) {
+
     debug_print("echo:%s", recvbuf);
 
-    ssize_t sentsz;
+    if(recvlen > sendlen) {
+        perror("recvlen>sendlen, queueing up send data isn't supported yet");
+        exit(EXIT_FAILURE);
+    }
+
+    memcpy(sendbuf, recvbuf, recvlen);
+    sendlen = recvlen;
 
     // TODO(Janitha): Should loop over send to make sure everything was sent
     // TODO(Janitha): Handle non blocking send
-    sentsz = send(sock, recvbuf, recvlen, 0);
+    // TODO(Janitha): ARRGGG.. the send should be here
+    //sentsz = send(sock, recvbuf, recvlen, 0);
+
+    if(!recvbuf && sendbuf) {
+        // Arrived from write_cb, so bug out
+        return STREAMWORK_FINISHED;
+    }
 
     return STREAMWORK_CONTINUE;
 }
@@ -84,14 +119,14 @@ RandomStreamWork::~RandomStreamWork() {
 }
 
 
-int RandomStreamWork::write_handler(char *sendbuf, ssize_t &sendlen) {
+int RandomStreamWork::write_handler(char *sendbuf, size_t &sendlen) {
 
     if(bytes_remaining <= sendlen) {
         sendlen = bytes_remaining;
     }
     bytes_remaining -= sendlen;
 
-    for(int i=0; i<sendlen; i++) {
+    for(size_t i=0; i<sendlen; i++) {
         // Randomize just printable ascii chars
         sendbuf[i] = '!' + (std::rand()%93);
     }
@@ -118,7 +153,7 @@ HttpClientStreamWork::~HttpClientStreamWork() {
 }
 
 
-int HttpClientStreamWork::write_handler(char *sendbuf, ssize_t &sendlen) {
+int HttpClientStreamWork::write_handler(char *sendbuf, size_t &sendlen) {
 
     char mybuf[] = "GET / HTTP/1.1\r\nSome-Header: Herp Derp\r\n\r\n";
 
