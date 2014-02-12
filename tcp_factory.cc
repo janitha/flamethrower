@@ -39,10 +39,10 @@ TcpFactory::TcpFactory(struct ev_loop *loop,
 
 TcpFactory::~TcpFactory() {
 
+    ev_async_stop(loop, &factory_async);
     ev_timer_stop(loop, &stats_timer);
 
     // TODO(Janitha): Free the workers
-
 }
 
 void TcpFactory::factory_cb(struct ev_loop *loop,
@@ -78,6 +78,7 @@ void TcpFactory::stats_cb() {
 void TcpFactory::worker_new_cb(TcpWorker *worker) {
     workers.push_back(worker);
     worker->workers_it = --workers.end();
+    cumulative_count++;
 }
 
 void TcpFactory::worker_delete_cb(TcpWorker *worker) {
@@ -154,15 +155,22 @@ void TcpServerFactory::accept_cb(struct ev_loop *loop,
 
 void TcpServerFactory::accept_cb() {
 
-    int client_sd;
+    // TODO(Janitha): Maybe this is better done in the worker_new_cb?
+    if(cumulative_count >= params->count) {
+        debug_print("cumulative count reached\n");
+        ev_io_stop(loop, &accept_watcher);
+        ev_async_stop(loop, &factory_async);
+        return;
+    }
 
+    // TODO(Janitha): Maybe this is better done in the worker_new_cb?
     if(workers.size() >= params->concurrency) {
-        debug_print("stopping accept_watcher\n");
         ev_io_stop(loop, &accept_watcher);
         return;
     }
 
     // Accept client request
+    int client_sd;
     if((client_sd = accept(accept_sock, 0, 0)) < 0) {
         if(errno == EWOULDBLOCK || errno == EAGAIN) {
             // Expected behavior for non-blocking io
@@ -201,6 +209,14 @@ void TcpClientFactory::factory_cb() {
 
     debug_print("called\n");
 
+    // TODO(Janitha): Maybe this is better done in the worker_new_cb?
+    if(cumulative_count >= params->count) {
+        debug_print("cumulative count reached\n");
+        ev_async_stop(loop, &factory_async);
+        return;
+    }
+
+    // TODO(Janitha): Maybe this is better done in the worker_new_cb?
     if(workers.size() >= params->concurrency) {
         return;
     }

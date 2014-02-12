@@ -68,8 +68,8 @@ public:
                     tcp_client_worker_params_t *params);
     virtual ~TcpClientWorker();
 
-    static void connect_cb(struct ev_loop *loop, struct ev_io *watcher,int revents);
-    virtual void connect_cb();
+    static void connected_cb(struct ev_loop *loop, struct ev_io *watcher,int revents);
+    virtual void connected_cb();
 
     static void timeout_cb(struct ev_loop *loop, struct ev_timer *watcher, int revents);
     virtual void timeout_cb();

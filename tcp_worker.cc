@@ -28,7 +28,7 @@ TcpWorker::~TcpWorker() {
     }
 
     if(shutdown(sock, SHUT_RDWR) == -1) {
-        perror("socket shutdown error");
+        // perror("socket shutdown error");
     }
 
     if(close(sock) == -1) {
@@ -253,18 +253,16 @@ TcpClientWorker::TcpClientWorker(struct ev_loop *loop,
 
     work = StreamWorkMaker::make(params, sock);
 
-    // TODO(Janitha): connect_cb be read, write or both?
     // Hookup socket connected event
     sock_w_ev.data = this;
-    ev_io_init(&sock_w_ev, connect_cb, sock, EV_READ|EV_WRITE);
+    ev_io_init(&sock_w_ev, connected_cb, sock, EV_READ|EV_WRITE);
     ev_io_start(factory->loop, &sock_w_ev);
 
     // TODO(Janitha): Implement the timeout_cb and reanable this
     // Hookup timeout event for socket
     sock_timeout.data = this;
     ev_timer_init(&sock_timeout, timeout_cb, factory->params->connect_timeout, 0);
-    //ev_timer_start(loop, &sock_timeout);
-
+    ev_timer_start(loop, &sock_timeout);
 }
 
 
@@ -274,7 +272,7 @@ TcpClientWorker::~TcpClientWorker() {
 }
 
 
-void TcpClientWorker::connect_cb(struct ev_loop *loop,
+void TcpClientWorker::connected_cb(struct ev_loop *loop,
                                  struct ev_io *watcher,
                                  int revents) {
     debug_print("called\n");
@@ -283,11 +281,11 @@ void TcpClientWorker::connect_cb(struct ev_loop *loop,
         return;
     }
     TcpClientWorker *worker = (TcpClientWorker*)watcher->data;
-    worker->connect_cb();
+    worker->connected_cb();
 }
 
 
-void TcpClientWorker::connect_cb() {
+void TcpClientWorker::connected_cb() {
 
     int error;
     socklen_t errsz = sizeof(error);
@@ -327,9 +325,10 @@ void TcpClientWorker::timeout_cb(struct ev_loop *loop,
     }
     TcpClientWorker *worker = (TcpClientWorker*)watcher->data;
     worker->timeout_cb();
-
 }
 
 void TcpClientWorker::timeout_cb() {
-    // TODO(Janitha): Implement the timeout logic and cleanup!!
+    debug_socket_print(sock, "timed out\n");
+    delete this;
+    return;
 }

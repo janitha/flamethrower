@@ -29,6 +29,7 @@ public:
     tcp_factory_params_t *params;
     struct ev_async factory_async;
     std::list<TcpWorker*> workers;
+    uint64_t cumulative_count;
 
     TcpFactory(struct ev_loop *loop, tcp_factory_params_t *params);
     virtual ~TcpFactory();
