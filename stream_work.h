@@ -65,5 +65,17 @@ public:
     virtual int write_handler(char *sendbuf, size_t &sendlen);
 };
 
+////////////////////////////////////////////////////////////////////////////////
+// HTTP server work
+////////////////////////////////////////////////////////////////////////////////
+class HttpServerStreamWork : public StreamWork {
+    StreamWorkHttpServerParams &params;
+public:
+    HttpServerStreamWork(StreamWorkHttpServerParams &params);
+    virtual ~HttpServerStreamWork();
+    virtual int handler(char *recvbuf, size_t recvlen,
+                        char *sendbuf, size_t &sendlen);
+};
+
 
 #endif

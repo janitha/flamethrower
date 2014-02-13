@@ -27,6 +27,8 @@ StreamWorkParams* StreamWorkParams::maker(boost::property_tree::ptree &ptree) {
         work = new StreamWorkRandomParams(ptree);
     } else if(work_type == "http_client" ) {
         work = new StreamWorkHttpClientParams(ptree);
+    } else if(work_type == "http_server" ) {
+        work = new StreamWorkHttpServerParams(ptree);
     } else {
         printf("error: invalid factory type\n");
         exit(EXIT_FAILURE);
@@ -56,6 +58,12 @@ StreamWorkHttpClientParams::StreamWorkHttpClientParams(boost::property_tree::ptr
     : StreamWorkParams(ptree) {
 
     type = StreamWorkType::HTTP_CLIENT;
+}
+
+StreamWorkHttpServerParams::StreamWorkHttpServerParams(boost::property_tree::ptree &ptree)
+    : StreamWorkParams(ptree) {
+
+    type = StreamWorkType::HTTP_SERVER;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

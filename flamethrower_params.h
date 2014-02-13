@@ -20,7 +20,8 @@ struct StreamWorkParams : public Params {
         NONE,
         ECHO,
         RANDOM,
-        HTTP_CLIENT
+        HTTP_CLIENT,
+        HTTP_SERVER
     } type;
 
     StreamWorkParams(boost::property_tree::ptree &ptree);
@@ -40,6 +41,10 @@ struct StreamWorkRandomParams : public StreamWorkParams {
 
 struct StreamWorkHttpClientParams : public StreamWorkParams {
     StreamWorkHttpClientParams(boost::property_tree::ptree &ptree);
+};
+
+struct StreamWorkHttpServerParams : public StreamWorkParams {
+    StreamWorkHttpServerParams(boost::property_tree::ptree &ptree);
 };
 
 ////////////////////////////////////////////////////////////////////////////////

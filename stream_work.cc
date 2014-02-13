@@ -24,6 +24,9 @@ StreamWork* StreamWork::make(StreamWorkParams &params) {
     case StreamWorkParams::StreamWorkType::HTTP_CLIENT:
         return new HttpClientStreamWork((StreamWorkHttpClientParams&)params);
         break;
+    case StreamWorkParams::StreamWorkType::HTTP_SERVER:
+        return new HttpServerStreamWork((StreamWorkHttpServerParams&)params);
+        break;
     default:
         perror("invalid streamwork type\n");
         exit(EXIT_FAILURE);
@@ -148,7 +151,9 @@ HttpClientStreamWork::~HttpClientStreamWork() {
 
 int HttpClientStreamWork::write_handler(char *sendbuf, size_t &sendlen) {
 
-    char mybuf[] = "GET / HTTP/1.1\r\nSome-Header: Herp Derp\r\n\r\n";
+    debug_print("httpclient");
+
+    const char mybuf[] = "GET / HTTP/1.1\r\nSome-Header: Herp Derp \r\n\r\n";
 
     if(sizeof(mybuf) <= sendlen) {
         memcpy(sendbuf, mybuf, sizeof(mybuf));
@@ -159,4 +164,34 @@ int HttpClientStreamWork::write_handler(char *sendbuf, size_t &sendlen) {
     }
 
     return STREAMWORK_FINISHED;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+HttpServerStreamWork::HttpServerStreamWork(StreamWorkHttpServerParams &params)
+    : StreamWork(params),
+      params(params) {
+}
+
+
+HttpServerStreamWork::~HttpServerStreamWork() {
+}
+
+int HttpServerStreamWork::handler(char *recvbuf, size_t recvlen,
+                                  char *sendbuf, size_t &sendlen) {
+
+    debug_print("httpserver:%s", recvbuf);
+
+    const char mybuf[] = "HTTP/1.1 200 OK\r\nServer: Firehose\r\n\r\nHello World";
+
+    if(sizeof(mybuf) <= sendlen) {
+        memcpy(sendbuf, mybuf, sizeof(mybuf));
+    } else {
+        // TODO(Janitha): Handle this gracefully by sending little by little
+        perror("Trickling data not implemented, this is a critical TODO\n");
+        exit(EXIT_FAILURE);
+    }
+
+    return STREAMWORK_SHUTDOWN;
+
 }

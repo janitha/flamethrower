@@ -33,7 +33,9 @@ TcpFactory::TcpFactory(struct ev_loop *loop,
                        TcpFactoryParams &params)
     : Factory(loop, params),
       params(params),
-      cumulative_count(0) {
+      cumulative_count(0),
+      bytes_in(0),
+      bytes_out(0) {
 
     stats_timer.data = this;
     ev_timer_init(&stats_timer, stats_cb, 0, 1.0);
@@ -81,7 +83,10 @@ void TcpFactory::stats_cb(struct ev_loop *loop,
 }
 
 void TcpFactory::stats_cb() {
-    debug_print("workers: %d\n", workers.size());
+    printf("bytes_in=%d bytes_out=%d workers=%d\n",
+           bytes_in,
+           bytes_out,
+           workers.size());
 }
 
 void TcpFactory::worker_new_cb(TcpWorker &worker) {

@@ -65,6 +65,8 @@ void TcpWorker::read_cb() {
             perror("socket recv error");
             return;
         }
+    } else {
+        factory.bytes_in += recvlen;
     }
 
     // Handle closing socket
@@ -95,6 +97,8 @@ void TcpWorker::read_cb() {
                 perror("send error");
                 exit(EXIT_FAILURE);
             }
+        } else{
+            factory.bytes_out += sendlen;
         }
     }
 
@@ -151,6 +155,8 @@ void TcpWorker::write_cb() {
             perror("send error");
             exit(EXIT_FAILURE);
         }
+    } else {
+        factory.bytes_out += sendlen;
     }
 
     if(hret == STREAMWORK_FINISHED) {
