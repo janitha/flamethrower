@@ -18,20 +18,20 @@ class TcpWorker {
 private:
     static const size_t RECVBUF_SIZE = 1500;
     static const size_t SENDBUF_SIZE = 1500;
-    tcp_worker_params_t *params;
-protected:
+public:
     struct ev_loop *loop;
-    TcpFactory *factory;
+    TcpFactory &factory;
+    TcpWorkerParams &params;
+
     StreamWork *work;
 
     int sock;
     struct ev_io sock_r_ev;
     struct ev_io sock_w_ev;
-public:
-    std::list<TcpWorker*>::iterator workers_it;
 
-    TcpWorker(struct ev_loop *loop, TcpFactory* factory,
-              tcp_worker_params_t *params, int sock=-1);
+    std::list<TcpWorker*>::iterator workers_list_pos;
+
+    TcpWorker(struct ev_loop *loop, TcpFactory &factory, TcpWorkerParams &params, int sock=-1);
     virtual ~TcpWorker();
 
     static void read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
@@ -47,10 +47,9 @@ public:
 ////////////////////////////////////////////////////////////////////////////////
 class TcpServerWorker : public TcpWorker {
 private:
-    tcp_server_worker_params_t *params;
+    TcpServerWorkerParams &params;
 public:
-    TcpServerWorker(struct ev_loop *loop, TcpServerFactory *factory,
-                    tcp_server_worker_params_t *params, int sock);
+    TcpServerWorker(struct ev_loop *loop, TcpServerFactory &factory, TcpServerWorkerParams &params, int sock);
     virtual ~TcpServerWorker();
 };
 
@@ -60,12 +59,10 @@ public:
 ////////////////////////////////////////////////////////////////////////////////
 class TcpClientWorker : public TcpWorker {
 private:
-    tcp_client_worker_params_t *params;
+    TcpClientWorkerParams &params;
     struct ev_timer sock_timeout;
 public:
-    TcpClientWorker(struct ev_loop *loop,
-                    TcpClientFactory *factory,
-                    tcp_client_worker_params_t *params);
+    TcpClientWorker(struct ev_loop *loop, TcpClientFactory &factory, TcpClientWorkerParams &params);
     virtual ~TcpClientWorker();
 
     static void connected_cb(struct ev_loop *loop, struct ev_io *watcher,int revents);

@@ -1,30 +1,39 @@
 #include "tcp_factory.h"
 #include "tcp_worker.h"
 
-
 ////////////////////////////////////////////////////////////////////////////////
-void FactoryMaker::make(struct ev_loop *loop,
-                        factory_params_t *params) {
+Factory::Factory(struct ev_loop *loop,
+                 FactoryParams &params)
+    : loop(loop),
+      params(params) {
 
-    switch(params->factory_type) {
-    case factory_params_t::TCP_SERVER:
-        new TcpServerFactory(loop, &params->tcp_server);
+}
+
+Factory::~Factory() {
+}
+
+Factory* Factory::maker(struct ev_loop *loop, FactoryParams &params) {
+
+    switch(params.type) {
+    case FactoryParams::FactoryType::TCP_SERVER:
+        return new TcpServerFactory(loop, (TcpServerFactoryParams&)params);
         break;
-    case factory_params_t::TCP_CLIENT:
-        new TcpClientFactory(loop, &params->tcp_client);
+    case FactoryParams::FactoryType::TCP_CLIENT:
+        return new TcpClientFactory(loop, (TcpClientFactoryParams&)params);
         break;
     default:
-        perror("invalid factory type\n");
+        perror("error: invalid factory type\n");
         exit(EXIT_FAILURE);
     }
-    return;
+    return nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 TcpFactory::TcpFactory(struct ev_loop *loop,
-                       tcp_factory_params_t *params)
-    : loop(loop),
-      params(params) {
+                       TcpFactoryParams &params)
+    : Factory(loop, params),
+      params(params),
+      cumulative_count(0) {
 
     stats_timer.data = this;
     ev_timer_init(&stats_timer, stats_cb, 0, 1.0);
@@ -75,20 +84,20 @@ void TcpFactory::stats_cb() {
     debug_print("workers: %d\n", workers.size());
 }
 
-void TcpFactory::worker_new_cb(TcpWorker *worker) {
-    workers.push_back(worker);
-    worker->workers_it = --workers.end();
+void TcpFactory::worker_new_cb(TcpWorker &worker) {
+    workers.push_back(&worker);
+    worker.workers_list_pos = --workers.end();
     cumulative_count++;
 }
 
-void TcpFactory::worker_delete_cb(TcpWorker *worker) {
-    workers.erase(worker->workers_it);
+void TcpFactory::worker_delete_cb(TcpWorker &worker) {
+    workers.erase(worker.workers_list_pos);
     ev_async_send(loop, &factory_async);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 TcpServerFactory::TcpServerFactory(struct ev_loop *loop,
-                                   tcp_server_factory_params_t *params)
+                                   TcpServerFactoryParams &params)
     : TcpFactory(loop, params),
       params(params) {
 
@@ -122,15 +131,15 @@ void TcpServerFactory::start_listening() {
     struct sockaddr_in sa_in;
     memset(&sa_in, 0, sizeof(sa_in));
     sa_in.sin_family = AF_INET;
-    sa_in.sin_port = params->bind_port;
-    sa_in.sin_addr.s_addr = params->bind_addr;
+    sa_in.sin_port = params.bind_port;
+    sa_in.sin_addr.s_addr = params.bind_addr;
     if(bind(accept_sock, (struct sockaddr*)&sa_in, sizeof(sa_in)) != 0) {
         perror("socket bind error");
         exit(EXIT_FAILURE);
     }
 
     // Listen
-    if(listen(accept_sock, params->accept_backlog) < 0) {
+    if(listen(accept_sock, params.accept_backlog) < 0) {
         perror("socket listen error");
         exit(EXIT_FAILURE);
     }
@@ -156,7 +165,7 @@ void TcpServerFactory::accept_cb(struct ev_loop *loop,
 void TcpServerFactory::accept_cb() {
 
     // TODO(Janitha): Maybe this is better done in the worker_new_cb?
-    if(cumulative_count >= params->count) {
+    if(cumulative_count >= params.count) {
         debug_print("cumulative count reached\n");
         ev_io_stop(loop, &accept_watcher);
         ev_async_stop(loop, &factory_async);
@@ -164,7 +173,7 @@ void TcpServerFactory::accept_cb() {
     }
 
     // TODO(Janitha): Maybe this is better done in the worker_new_cb?
-    if(workers.size() >= params->concurrency) {
+    if(workers.size() >= params.concurrency) {
         ev_io_stop(loop, &accept_watcher);
         return;
     }
@@ -183,9 +192,9 @@ void TcpServerFactory::accept_cb() {
 
     debug_socket_print(client_sd, "accepted\n");
 
-    TcpServerWorker *worker = new TcpServerWorker(loop, this,
-                                                  &params->server_worker,
-                                                  client_sd);
+    // New worker
+    new TcpServerWorker(loop, *this, *params.worker, client_sd);
+
 }
 
 void TcpServerFactory::factory_cb() {
@@ -197,7 +206,7 @@ void TcpServerFactory::factory_cb() {
 
 ////////////////////////////////////////////////////////////////////////////////
 TcpClientFactory::TcpClientFactory(struct ev_loop *loop,
-                                   tcp_client_factory_params_t *params)
+                                   TcpClientFactoryParams &params)
     : TcpFactory(loop, params),
       params(params) {
 
@@ -210,14 +219,14 @@ void TcpClientFactory::factory_cb() {
     debug_print("called\n");
 
     // TODO(Janitha): Maybe this is better done in the worker_new_cb?
-    if(cumulative_count >= params->count) {
+    if(cumulative_count >= params.count) {
         debug_print("cumulative count reached\n");
         ev_async_stop(loop, &factory_async);
         return;
     }
 
     // TODO(Janitha): Maybe this is better done in the worker_new_cb?
-    if(workers.size() >= params->concurrency) {
+    if(workers.size() >= params.concurrency) {
         return;
     }
 
@@ -227,8 +236,9 @@ void TcpClientFactory::factory_cb() {
 
 void TcpClientFactory::create_connection() {
 
-    TcpClientWorker *tcw = new TcpClientWorker(loop, this,
-                                               &params->client_worker);
+    // New worker
+    new TcpClientWorker(loop, *this, *params.worker);
+
 }
 
 TcpClientFactory::~TcpClientFactory() {

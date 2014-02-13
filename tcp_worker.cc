@@ -2,17 +2,17 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 TcpWorker::TcpWorker(struct ev_loop *loop,
-                     TcpFactory *factory,
-                     tcp_worker_params_t *params,
+                     TcpFactory &factory,
+                     TcpWorkerParams &params,
                      int sock)
-    : params(params),
-      loop(loop),
+    : loop(loop),
       factory(factory),
+      params(params),
       sock(sock) {
 
     debug_print("ctor\n");
 
-    factory->worker_new_cb(this);
+    factory.worker_new_cb(*this);
 }
 
 
@@ -35,7 +35,7 @@ TcpWorker::~TcpWorker() {
         perror("socket close error");
     }
 
-    factory->worker_delete_cb(this);
+    factory.worker_delete_cb(*this);
 }
 
 void TcpWorker::read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
@@ -160,8 +160,8 @@ void TcpWorker::write_cb() {
 
 ////////////////////////////////////////////////////////////////////////////////
 TcpServerWorker::TcpServerWorker(struct ev_loop *loop,
-                                 TcpServerFactory *factory,
-                                 tcp_server_worker_params_t *params,
+                                 TcpServerFactory &factory,
+                                 TcpServerWorkerParams &params,
                                  int sock)
     : TcpWorker(loop, factory, params, sock),
       params(params) {
@@ -169,11 +169,11 @@ TcpServerWorker::TcpServerWorker(struct ev_loop *loop,
     debug_print("ctor\n");
 
     // Set linger behavior
-    if(params->linger) {
+    {
         struct linger lingerval;
         memset(&lingerval, 0, sizeof(lingerval));
-        lingerval.l_onoff = 0;
-        lingerval.l_linger = 0;
+        lingerval.l_onoff = params.linger ? 1 : 0;
+        lingerval.l_linger = params.linger;
         if(setsockopt(sock, SOL_SOCKET, SO_LINGER, &lingerval, sizeof(lingerval)) < 0) {
             perror("setsockopt error");
             exit(EXIT_FAILURE);
@@ -181,17 +181,17 @@ TcpServerWorker::TcpServerWorker(struct ev_loop *loop,
     }
 
     // Create a worker
-    work = StreamWorkMaker::make(params, sock);
+    work = StreamWork::make(*params.work);
 
     // Hookup socket readable event
     sock_r_ev.data = this;
     ev_io_init(&sock_r_ev, read_cb, sock, EV_READ);
-    ev_io_start(factory->loop, &sock_r_ev);
+    ev_io_start(loop, &sock_r_ev);
 
     // Hookup socket writable event
     sock_w_ev.data = this;
     ev_io_init(&sock_w_ev, write_cb, sock, EV_WRITE);
-    ev_io_start(factory->loop, &sock_w_ev);
+    ev_io_start(loop, &sock_w_ev);
 }
 
 TcpServerWorker::~TcpServerWorker() {
@@ -200,8 +200,8 @@ TcpServerWorker::~TcpServerWorker() {
 
 ////////////////////////////////////////////////////////////////////////////////
 TcpClientWorker::TcpClientWorker(struct ev_loop *loop,
-                                 TcpClientFactory *factory,
-                                 tcp_client_worker_params_t *params)
+                                 TcpClientFactory &factory,
+                                 TcpClientWorkerParams &params)
     : TcpWorker(loop, factory, params),
       params(params) {
 
@@ -214,11 +214,11 @@ TcpClientWorker::TcpClientWorker(struct ev_loop *loop,
     }
 
     // Set linger behavior
-    if(params->linger) {
+    {
         struct linger lingerval;
         memset(&lingerval, 0, sizeof(lingerval));
-        lingerval.l_onoff = 0;
-        lingerval.l_linger = 0;
+        lingerval.l_onoff = params.linger ? 1 : 0;
+        lingerval.l_linger = params.linger;
         if(setsockopt(sock, SOL_SOCKET, SO_LINGER, &lingerval, sizeof(lingerval)) < 0) {
             perror("setsockopt error");
             exit(EXIT_FAILURE);
@@ -229,8 +229,8 @@ TcpClientWorker::TcpClientWorker(struct ev_loop *loop,
     struct sockaddr_in sa_bind;
     memset(&sa_bind, 0, sizeof(sa_bind));
     sa_bind.sin_family = AF_INET;
-    sa_bind.sin_port = factory->params->bind_port;
-    sa_bind.sin_addr.s_addr = factory->params->bind_addr;
+    sa_bind.sin_port = factory.params.bind_port;
+    sa_bind.sin_addr.s_addr = factory.params.bind_addr;
     if(bind(sock, (struct sockaddr*)&sa_bind, sizeof(sa_bind)) != 0) {
         perror("socket bind error");
         exit(EXIT_FAILURE);
@@ -240,8 +240,8 @@ TcpClientWorker::TcpClientWorker(struct ev_loop *loop,
     struct sockaddr_in sa_connect;
     memset(&sa_connect, 0, sizeof(sa_connect));
     sa_connect.sin_family = AF_INET;
-    sa_connect.sin_port = factory->params->server_port;
-    sa_connect.sin_addr.s_addr = factory->params->server_addr;
+    sa_connect.sin_port = factory.params.server_port;
+    sa_connect.sin_addr.s_addr = factory.params.server_addr;
     if(connect(sock, (struct sockaddr *)&sa_connect, sizeof(sa_connect)) < 0) {
         if(errno != EINPROGRESS) {
             perror("socket connect error");
@@ -251,17 +251,17 @@ TcpClientWorker::TcpClientWorker(struct ev_loop *loop,
 
     debug_socket_print(sock, "connecting\n");
 
-    work = StreamWorkMaker::make(params, sock);
+    work = StreamWork::make(*params.work);
 
     // Hookup socket connected event
     sock_w_ev.data = this;
     ev_io_init(&sock_w_ev, connected_cb, sock, EV_READ|EV_WRITE);
-    ev_io_start(factory->loop, &sock_w_ev);
+    ev_io_start(loop, &sock_w_ev);
 
     // TODO(Janitha): Implement the timeout_cb and reanable this
     // Hookup timeout event for socket
     sock_timeout.data = this;
-    ev_timer_init(&sock_timeout, timeout_cb, factory->params->connect_timeout, 0);
+    ev_timer_init(&sock_timeout, timeout_cb, factory.params.connect_timeout, 0);
     ev_timer_start(loop, &sock_timeout);
 }
 
@@ -283,7 +283,6 @@ void TcpClientWorker::connected_cb(struct ev_loop *loop,
     TcpClientWorker *worker = (TcpClientWorker*)watcher->data;
     worker->connected_cb();
 }
-
 
 void TcpClientWorker::connected_cb() {
 
