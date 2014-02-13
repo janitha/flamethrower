@@ -5,6 +5,7 @@
 
 #include "tcp_factory.h"
 
+
 ////////////////////////////////////////////////////////////////////////////////
 // Flamethrower main class
 ////////////////////////////////////////////////////////////////////////////////
@@ -12,9 +13,11 @@ class Flamethrower {
 private:
 public:
     struct ev_loop *loop;
-    flamethrower_params_t params;
+    FlamethrowerParams params;
 
-    Flamethrower(char *params_filename);
+    std::list<Factory*> factories;
+
+    Flamethrower(boost::property_tree::ptree &params_ptree);
     virtual ~Flamethrower();
 
     void loop_iteration();
