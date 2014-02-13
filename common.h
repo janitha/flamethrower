@@ -16,7 +16,6 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 
-#include <msgpack.hpp>
 #include <ev.h>
 
 #include "flamethrower_params.h"
