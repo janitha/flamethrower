@@ -27,9 +27,11 @@ TcpWorker::~TcpWorker() {
         delete work;
     }
 
+    /*
     if(shutdown(sock, SHUT_RDWR) == -1) {
-        // perror("socket shutdown error");
+        perror("socket shutdown error");
     }
+    */
 
     if(close(sock) == -1) {
         perror("socket close error");
@@ -39,7 +41,6 @@ TcpWorker::~TcpWorker() {
 }
 
 void TcpWorker::read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
-    debug_print("called\n");
     if(revents & EV_ERROR) {
         perror("invalid event");
         return;
@@ -49,6 +50,8 @@ void TcpWorker::read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents
 }
 
 void TcpWorker::read_cb() {
+
+    debug_socket_print(sock, "called\n");
 
     char recvbuf[RECVBUF_SIZE];
     ssize_t recvlen;
@@ -79,15 +82,19 @@ void TcpWorker::read_cb() {
     if((hret=work->handler(recvbuf, recvlen, sendbuf, sendlen)) < 0) {
         perror("work handler error");
         exit(EXIT_FAILURE);
-        // TODO(Janitha): Shutdown socket and kill the worker
+        // TODO(Janitha): Shutdown socket and kill the worker instead of exit
     }
 
     if(sendlen) {
         // TODO(Janitha): Abstract the send to a single location (between cbs)
-        if(send(sock, sendbuf, sendlen, 0) < 0) {
-            // TODO(Janitha): Handle non blocking send conditions
-            perror("send error");
-            exit(EXIT_FAILURE);
+        if(send(sock, sendbuf, sendlen, MSG_NOSIGNAL) < 0) {
+            if(errno == EPIPE) {
+                perror("socket error: broken pipe");
+            } else {
+                // TODO(Janitha): Handle non blocking send conditions
+                perror("send error");
+                exit(EXIT_FAILURE);
+            }
         }
     }
 
@@ -109,7 +116,6 @@ void TcpWorker::read_cb() {
 }
 
 void TcpWorker::write_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
-    debug_print("called\n");
     if(revents & EV_ERROR) {
         perror("invalid event");
         return;
@@ -130,17 +136,21 @@ void TcpWorker::write_cb() {
     memset(sendbuf, 0, sizeof(sendbuf));
 
     int hret;
-    if((hret = work->handler(0, 0, sendbuf, sendlen)) < 0) {
+    if((hret = work->handler(nullptr, 0, sendbuf, sendlen)) < 0) {
         // TODO(Janitha): Lets make this a bit more graceful
         perror("work handler error");
         exit(EXIT_FAILURE);
     }
 
     // TODO(Janitha): We can do TCP_CORK and TCP_NODELAY
-    if(send(sock, sendbuf, sendlen, 0) < 0) {
-        // TODO(Janitha): Handle non blocking send conditions
-        perror("send error");
-        exit(EXIT_FAILURE);
+    if(send(sock, sendbuf, sendlen, MSG_NOSIGNAL) < 0) {
+        if(errno == EPIPE) {
+            perror("socket error: broken pipe");
+        } else {
+            // TODO(Janitha): Handle non blocking send conditions
+            perror("send error");
+            exit(EXIT_FAILURE);
+        }
     }
 
     if(hret == STREAMWORK_FINISHED) {
@@ -152,7 +162,7 @@ void TcpWorker::write_cb() {
     if(hret == STREAMWORK_SHUTDOWN) {
         debug_socket_print(sock, "shutdown\n");
         ev_io_stop(loop, &sock_w_ev);
-        shutdown(sock, SHUT_WR);
+        //shutdown(sock, SHUT_WR);
         delete this;
         return;
     }
@@ -225,6 +235,13 @@ TcpClientWorker::TcpClientWorker(struct ev_loop *loop,
         }
     }
 
+    // Allow address reuse
+    int optval1 = 1;
+    if(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &optval1, sizeof(optval1)) < 0) {
+        perror("setsockopt error");
+        exit(EXIT_FAILURE);
+    }
+
     // Bind to local
     struct sockaddr_in sa_bind;
     memset(&sa_bind, 0, sizeof(sa_bind));
@@ -258,6 +275,10 @@ TcpClientWorker::TcpClientWorker(struct ev_loop *loop,
     ev_io_init(&sock_w_ev, connected_cb, sock, EV_READ|EV_WRITE);
     ev_io_start(loop, &sock_w_ev);
 
+    // Initialize the sock_r_ev, but don't stop yet
+    sock_r_ev.data = this;
+    ev_io_init(&sock_r_ev, read_cb, sock, EV_READ);
+
     // TODO(Janitha): Implement the timeout_cb and reanable this
     // Hookup timeout event for socket
     sock_timeout.data = this;
@@ -275,7 +296,6 @@ TcpClientWorker::~TcpClientWorker() {
 void TcpClientWorker::connected_cb(struct ev_loop *loop,
                                  struct ev_io *watcher,
                                  int revents) {
-    debug_print("called\n");
     if(revents & EV_ERROR) {
         perror("invalid event");
         return;
@@ -286,6 +306,8 @@ void TcpClientWorker::connected_cb(struct ev_loop *loop,
 
 void TcpClientWorker::connected_cb() {
 
+    debug_socket_print(sock, "called\n");
+
     int error;
     socklen_t errsz = sizeof(error);
     if(getsockopt(sock, SOL_SOCKET, SO_ERROR, &error, &errsz) == -1) {
@@ -293,8 +315,8 @@ void TcpClientWorker::connected_cb() {
         exit(EXIT_FAILURE);
     }
 
-    ev_io_stop(loop, &sock_r_ev);
     ev_io_stop(loop, &sock_w_ev);
+    ev_io_stop(loop, &sock_r_ev);
     ev_timer_stop(loop, &sock_timeout);
 
     if(error) {

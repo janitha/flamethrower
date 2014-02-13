@@ -4,6 +4,7 @@
 #include "common.h"
 #include "tcp_worker.h"
 
+// TODO(Janitha): Make this an enum inside StreamWork
 #define STREAMWORK_SHUTDOWN  2
 #define STREAMWORK_FINISHED  1
 #define STREAMWORK_CONTINUE  0

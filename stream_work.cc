@@ -4,7 +4,6 @@
 
 
 
-
 ////////////////////////////////////////////////////////////////////////////////
 StreamWork::StreamWork(StreamWorkParams &params)
     : params(params) {
@@ -34,29 +33,30 @@ StreamWork* StreamWork::make(StreamWorkParams &params) {
 
 int StreamWork::handler(char *recvbuf, size_t recvlen,
                         char *sendbuf, size_t &sendlen) {
-    int rret, wret;
+    int rret = STREAMWORK_CONTINUE;
+    int wret = STREAMWORK_CONTINUE;
+
+    if(recvbuf && (rret = read_handler(recvbuf, recvlen)) < 0) {
+        perror("read handler error");
+        exit(EXIT_FAILURE);
+    }
+    if(sendbuf && (wret = write_handler(sendbuf, sendlen)) < 0) {
+        perror("write handler error");
+        exit(EXIT_FAILURE);
+    }
 
     if(recvbuf) {
-        if((rret = read_handler(recvbuf, recvlen)) < 0) {
-            perror("read handler error");
-            exit(EXIT_FAILURE);
-        }
+        return rret;
+    } else {
+        // TODO(Janitha): Does this even make sense?
+        return std::max<int>(rret, wret);
     }
-    if(sendbuf) {
-        if((wret = write_handler(sendbuf, sendlen)) < 0) {
-            perror("write handler error");
-            exit(EXIT_FAILURE);
-        }
-    }
-
-    // TODO(Janitha): Is this the returning the highest code right?
-    return std::max<int>(rret, wret);
 
 }
 
 int StreamWork::read_handler(char *recvbuf, size_t recvlen) {
     debug_print("dumb:%s", recvbuf);
-    return STREAMWORK_FINISHED;
+    return STREAMWORK_CONTINUE;
 }
 
 int StreamWork::write_handler(char *sendbuf, size_t &sendlen) {
