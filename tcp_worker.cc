@@ -54,10 +54,11 @@ void TcpWorker::read_cb() {
     debug_socket_print(sock, "called\n");
 
     char recvbuf[RECVBUF_SIZE];
+    memset(recvbuf, 0, sizeof(recvbuf));
     ssize_t recvlen;
 
     // Read
-    memset(recvbuf, 0, sizeof(recvbuf));
+
     if((recvlen = recv(sock, recvbuf, RECVBUF_SIZE, 0)) < 0) {
         if(errno == EWOULDBLOCK || errno == EAGAIN) {
             // Expected behavior for non-blocking io
@@ -78,18 +79,19 @@ void TcpWorker::read_cb() {
     }
 
     char sendbuf[SENDBUF_SIZE];
-    size_t sendlen = sizeof(sendbuf);
+    memset(sendbuf, 0, sizeof(sendbuf));
+    size_t sentlen = 0;
 
     int hret;
-    if((hret=work->handler(recvbuf, recvlen, sendbuf, sendlen)) < 0) {
+    if((hret=work->handler(recvbuf, recvlen, sendbuf, sizeof(sendbuf), sentlen)) < 0) {
         perror("work handler error");
         exit(EXIT_FAILURE);
         // TODO(Janitha): Shutdown socket and kill the worker instead of exit
     }
 
-    if(sendlen) {
+    if(sentlen) {
         // TODO(Janitha): Abstract the send to a single location (between cbs)
-        if(send(sock, sendbuf, sendlen, MSG_NOSIGNAL) < 0) {
+        if(send(sock, sendbuf, sentlen, MSG_NOSIGNAL) < 0) {
             if(errno == EPIPE) {
                 perror("socket error: broken pipe");
             } else {
@@ -98,7 +100,7 @@ void TcpWorker::read_cb() {
                 exit(EXIT_FAILURE);
             }
         } else{
-            factory.bytes_out += sendlen;
+            factory.bytes_out += sentlen;
         }
     }
 
@@ -108,10 +110,10 @@ void TcpWorker::read_cb() {
 
     if(hret == STREAMWORK_SHUTDOWN) {
 
-        debug_socket_print(sock, "shutdown\n");
+        debug_socket_print(sock, "read shutdown\n");
 
         ev_io_stop(loop, &sock_r_ev);
-        if(shutdown(sock, SHUT_RDWR) < 0) {
+        if(shutdown(sock, SHUT_RD) < 0) {
             perror("socket shutdown error");
             exit(EXIT_FAILURE);
         }
@@ -130,24 +132,21 @@ void TcpWorker::write_cb(struct ev_loop *loop, struct ev_io *watcher, int revent
 
 void TcpWorker::write_cb() {
 
-    // TODO(Janitha): Test socket if it's writable and stuff
-
     debug_socket_print(sock, "called\n");
 
     char sendbuf[SENDBUF_SIZE];
-    size_t sendlen = sizeof(sendbuf);
-
     memset(sendbuf, 0, sizeof(sendbuf));
+    size_t sentlen = 0;
 
     int hret;
-    if((hret = work->handler(nullptr, 0, sendbuf, sendlen)) < 0) {
+    if((hret = work->handler(nullptr, 0, sendbuf, sizeof(sendbuf), sentlen)) < 0) {
         // TODO(Janitha): Lets make this a bit more graceful
         perror("work handler error");
         exit(EXIT_FAILURE);
     }
 
     // TODO(Janitha): We can do TCP_CORK and TCP_NODELAY
-    if(send(sock, sendbuf, sendlen, MSG_NOSIGNAL) < 0) {
+    if(send(sock, sendbuf, sentlen, MSG_NOSIGNAL) < 0) {
         if(errno == EPIPE) {
             perror("socket error: broken pipe");
         } else {
@@ -156,7 +155,7 @@ void TcpWorker::write_cb() {
             exit(EXIT_FAILURE);
         }
     } else {
-        factory.bytes_out += sendlen;
+        factory.bytes_out += sentlen;
     }
 
     if(hret == STREAMWORK_FINISHED) {
@@ -166,11 +165,11 @@ void TcpWorker::write_cb() {
     }
 
     if(hret == STREAMWORK_SHUTDOWN) {
-        debug_socket_print(sock, "shutdown\n");
+        debug_socket_print(sock, "write shutdown\n");
         ev_io_stop(loop, &sock_w_ev);
-        //shutdown(sock, SHUT_WR);
-        delete this;
-        return;
+        shutdown(sock, SHUT_WR);
+        //delete this;
+        //return;
     }
 }
 

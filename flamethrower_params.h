@@ -44,6 +44,7 @@ struct StreamWorkHttpClientParams : public StreamWorkParams {
 };
 
 struct StreamWorkHttpServerParams : public StreamWorkParams {
+
     StreamWorkHttpServerParams(boost::property_tree::ptree &ptree);
 };
 

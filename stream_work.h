@@ -14,15 +14,16 @@
 // Base class for Work
 ////////////////////////////////////////////////////////////////////////////////
 class StreamWork {
-    StreamWorkParams &params;
 public:
+    StreamWorkParams &params;
     int sock;
+
     StreamWork(StreamWorkParams &params);
     virtual ~StreamWork();
     virtual int handler(char *recvbuf, size_t recvlen,
-                        char *sendbuf, size_t &sendlen);
+                        char *sendbuf, size_t sendlen, size_t &sentlen);
     virtual int read_handler(char *recvbuf, size_t recvlen);
-    virtual int write_handler(char *sendbuf, size_t &sendlen);
+    virtual int write_handler(char *sendbuf, size_t sendlen, size_t &sentlen);
 
     static StreamWork* make(StreamWorkParams &params);
 };
@@ -32,12 +33,13 @@ public:
 // Echo work
 ////////////////////////////////////////////////////////////////////////////////
 class EchoStreamWork : public StreamWork {
-    StreamWorkEchoParams &params;
 public:
+    StreamWorkEchoParams &params;
+
     EchoStreamWork(StreamWorkEchoParams &params);
     virtual ~EchoStreamWork();
     virtual int handler(char *recvbuf, size_t recvlen,
-                        char *sendbuf, size_t &sendlen);
+                        char *sendbuf, size_t sendlen, size_t &sentlen);
 };
 
 
@@ -45,12 +47,13 @@ public:
 // Random sender and echo work
 ////////////////////////////////////////////////////////////////////////////////
 class RandomStreamWork : public StreamWork {
+public:
     StreamWorkRandomParams &params;
     uint32_t bytes_remaining;
-public:
+
     RandomStreamWork(StreamWorkRandomParams &params);
     virtual ~RandomStreamWork();
-    virtual int write_handler(char *sendbuf, size_t &sendlen);
+    virtual int write_handler(char *sendbuf, size_t sendlen, size_t &sentlen);
 };
 
 
@@ -58,23 +61,41 @@ public:
 // HTTP client work
 ////////////////////////////////////////////////////////////////////////////////
 class HttpClientStreamWork : public StreamWork {
-    StreamWorkHttpClientParams &params;
 public:
+    StreamWorkHttpClientParams &params;
+
     HttpClientStreamWork(StreamWorkHttpClientParams &params);
     virtual ~HttpClientStreamWork();
-    virtual int write_handler(char *sendbuf, size_t &sendlen);
+    virtual int write_handler(char *sendbuf, size_t sendlen, size_t &sentlen);
 };
 
 ////////////////////////////////////////////////////////////////////////////////
 // HTTP server work
 ////////////////////////////////////////////////////////////////////////////////
 class HttpServerStreamWork : public StreamWork {
-    StreamWorkHttpServerParams &params;
 public:
+    StreamWorkHttpServerParams &params;
+
+    const char *res_header_ptr;
+    uint32_t res_header_remaining;
+
+    const char *res_body_ptr;
+    uint32_t res_body_remaining;
+
+    enum class ServerState {
+        REQUEST_HEADER,
+        REQUEST_BODY,
+        REQUEST_DONE,
+        RESPONSE_HEADER,
+        RESPONSE_BODY,
+        RESPONSE_DONE,
+        SERVER_DONE
+    } state;
+
     HttpServerStreamWork(StreamWorkHttpServerParams &params);
     virtual ~HttpServerStreamWork();
     virtual int handler(char *recvbuf, size_t recvlen,
-                        char *sendbuf, size_t &sendlen);
+                        char *sendbuf, size_t sendlen, size_t &sentlen);
 };
 
 

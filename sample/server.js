@@ -16,7 +16,7 @@
                 "linger" : 0,
 
                 "work" : {
-                    "type" : "echo"
+                    "type" : "http_server"
                 }
             }
         }
