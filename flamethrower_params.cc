@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <map>
 
@@ -91,6 +92,43 @@ TcpServerHttpParams::TcpServerHttpParams(boost::property_tree::ptree &ptree)
     : TcpServerWorkerParams(ptree) {
 
     type = WorkerType::HTTP;
+
+    static const char default_header[] =
+        "HTTP/1.1 200 OK\r\n"
+        "Server: Firehose\r\n"
+        "Content-Type: text/plain\r\n"
+        "\r\n";
+    static const char default_body[] =
+        "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod "
+        "tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim "
+        "veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea "
+        "commodo consequat. Duis aute irure dolor in reprehenderit in voluptate "
+        "velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat "
+        "cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id "
+        "est laborum.";
+
+    std::ifstream header_file(ptree.get<std::string>("header_payload"), std::ios::in | std::ios::binary);
+    if(!header_file) {
+        perror("error: invalid http response header file");
+        exit(EXIT_FAILURE);
+    }
+    header_file.seekg(0, header_file.end);
+    header_payload_len = header_file.tellg();
+    header_file.seekg(0, header_file.beg);
+    header_payload_ptr = new char[header_payload_len];
+    header_file.read(header_payload_ptr, header_payload_len);
+
+    std::ifstream body_file(ptree.get<std::string>("body_payload"), std::ios::in | std::ios::binary);
+    if(!body_file) {
+        perror("error: invalid http response body file");
+        exit(EXIT_FAILURE);
+    }
+    body_file.seekg(0, body_file.end);
+    body_payload_len = body_file.tellg();
+    body_file.seekg(0, body_file.beg);
+    body_payload_ptr = new char[body_payload_len];
+    body_file.read(body_payload_ptr, body_payload_len);
+
 }
 
 TcpClientHttpParams::TcpClientHttpParams(boost::property_tree::ptree &ptree)

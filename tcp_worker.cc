@@ -488,25 +488,11 @@ TcpServerHttp::TcpServerHttp(TcpServerFactory &factory, TcpServerHttpParams &par
       state(ServerState::REQUEST_HEADER) {
     debug_print("ctor\n");
 
-    static const char default_header[] =
-        "HTTP/1.1 200 OK\r\n"
-        "Server: Firehose\r\n"
-        "Content-Type: text/plain\r\n"
-        "\r\n";
-    static const char default_body[] =
-        "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod "
-        "tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim "
-        "veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea "
-        "commodo consequat. Duis aute irure dolor in reprehenderit in voluptate "
-        "velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat "
-        "cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id "
-        "est laborum.";
+    res_header_ptr = params.header_payload_ptr;
+    res_header_remaining = params.header_payload_len;
 
-    res_header_ptr = default_header;
-    res_header_remaining = sizeof(default_header) - 1;
-
-    res_body_ptr = default_body;
-    res_body_remaining = sizeof(default_body) - 1;
+    res_body_ptr = params.body_payload_ptr;
+    res_body_remaining = params.body_payload_len;
 }
 
 TcpServerHttp::~TcpServerHttp() {
@@ -683,6 +669,7 @@ TcpClientHttp::TcpClientHttp(TcpClientFactory &factory, TcpClientHttpParams &par
     : TcpClientWorker(factory, params),
       params(params) {
     debug_print("ctor\n");
+
 }
 
 TcpClientHttp::~TcpClientHttp() {
