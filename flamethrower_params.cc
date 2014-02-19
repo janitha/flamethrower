@@ -14,90 +14,67 @@
 Params::Params(boost::property_tree::ptree &ptree) {
 }
 
-
-////////////////////////////////////////////////////////////////////////////////
-StreamWorkParams* StreamWorkParams::maker(boost::property_tree::ptree &ptree) {
-
-    StreamWorkParams* work;
-    std::string work_type = ptree.get<std::string>("type");
-
-    if(work_type == "echo") {
-        work = new StreamWorkEchoParams(ptree);
-    } else if(work_type == "random") {
-        work = new StreamWorkRandomParams(ptree);
-    } else if(work_type == "http_client" ) {
-        work = new StreamWorkHttpClientParams(ptree);
-    } else if(work_type == "http_server" ) {
-        work = new StreamWorkHttpServerParams(ptree);
-    } else {
-        printf("error: invalid factory type\n");
-        exit(EXIT_FAILURE);
-    }
-    return work;
-}
-
-StreamWorkParams::StreamWorkParams(boost::property_tree::ptree &ptree)
-    : Params(ptree) {
-}
-
-StreamWorkEchoParams::StreamWorkEchoParams(boost::property_tree::ptree &ptree)
-    : StreamWorkParams(ptree) {
-
-    type = StreamWorkType::ECHO;
-}
-
-StreamWorkRandomParams::StreamWorkRandomParams(boost::property_tree::ptree &ptree)
-    : StreamWorkParams(ptree) {
-
-    type = StreamWorkType::RANDOM;
-    bytes = ptree.get<uint32_t>("bytes");
-    shutdown = ptree.get<bool>("shutdown");
-}
-
-StreamWorkHttpClientParams::StreamWorkHttpClientParams(boost::property_tree::ptree &ptree)
-    : StreamWorkParams(ptree) {
-
-    type = StreamWorkType::HTTP_CLIENT;
-}
-
-StreamWorkHttpServerParams::StreamWorkHttpServerParams(boost::property_tree::ptree &ptree)
-    : StreamWorkParams(ptree) {
-
-    type = StreamWorkType::HTTP_SERVER;
-}
-
 ////////////////////////////////////////////////////////////////////////////////
 TcpWorkerParams::TcpWorkerParams(boost::property_tree::ptree &ptree)
     : Params(ptree) {
 
     linger = ptree.get<int>("linger");
+}
 
-    work = StreamWorkParams::maker(ptree.get_child("work"));
+TcpServerWorkerParams* TcpServerWorkerParams::maker(boost::property_tree::ptree &ptree) {
+
+    std::string worker_type = ptree.get<std::string>("type");
+    if(worker_type == "echo") {
+        return new TcpServerEchoParams(ptree);
+    } else {
+        printf("error: invalid factory type\n");
+        exit(EXIT_FAILURE);
+    }
 }
 
 TcpServerWorkerParams::TcpServerWorkerParams(boost::property_tree::ptree &ptree)
     : TcpWorkerParams(ptree) {
 }
 
+TcpClientWorkerParams* TcpClientWorkerParams::maker(boost::property_tree::ptree &ptree) {
+
+    std::string worker_type = ptree.get<std::string>("type");
+    if(worker_type == "echo") {
+        return new TcpClientEchoParams(ptree);
+    } else {
+        printf("error: invalid factory type\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
 TcpClientWorkerParams::TcpClientWorkerParams(boost::property_tree::ptree &ptree)
     : TcpWorkerParams(ptree) {
+}
+
+TcpServerEchoParams::TcpServerEchoParams(boost::property_tree::ptree &ptree)
+    : TcpServerWorkerParams(ptree) {
+
+    type = WorkerType::ECHO;
+}
+
+TcpClientEchoParams::TcpClientEchoParams(boost::property_tree::ptree &ptree)
+    : TcpClientWorkerParams(ptree) {
+
+    type = WorkerType::ECHO;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 FactoryParams* FactoryParams::maker(boost::property_tree::ptree &ptree) {
 
-    FactoryParams *factory;
     std::string factory_type = ptree.get<std::string>("type");
-
     if(factory_type == "tcp_server") {
-        factory = new TcpServerFactoryParams(ptree);
+        return new TcpServerFactoryParams(ptree);
     } else if (factory_type == "tcp_client") {
-        factory = new TcpClientFactoryParams(ptree);
+        return new TcpClientFactoryParams(ptree);
     } else {
         printf("error: invalid factory type\n");
         exit(EXIT_FAILURE);
     }
-    return factory;
 }
 
 FactoryParams::FactoryParams(boost::property_tree::ptree &ptree)
@@ -119,7 +96,7 @@ TcpServerFactoryParams::TcpServerFactoryParams(boost::property_tree::ptree &ptre
     type = FactoryType::TCP_SERVER;
     accept_backlog = ptree.get<uint32_t>("accept_backlog");
 
-    worker = new TcpServerWorkerParams(ptree.get_child("worker"));
+    worker = TcpServerWorkerParams::maker(ptree.get_child("worker"));
 }
 
 TcpClientFactoryParams::TcpClientFactoryParams(boost::property_tree::ptree &ptree)
@@ -130,7 +107,7 @@ TcpClientFactoryParams::TcpClientFactoryParams(boost::property_tree::ptree &ptre
     server_port = htons(ptree.get<uint16_t>("server_port"));
     connect_timeout = ptree.get<float>("connect_timeout");
 
-    worker = new TcpClientWorkerParams(ptree.get_child("worker"));
+    worker = TcpClientWorkerParams::maker(ptree.get_child("worker"));
 }
 
 ////////////////////////////////////////////////////////////////////////////////

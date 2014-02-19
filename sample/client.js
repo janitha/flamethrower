@@ -15,13 +15,9 @@
             "count" : 10000000,
 
             "worker" : {
-                "linger" : 0,
+                "type" : "echo",
 
-                "work" : {
-                    "type" : "random",
-                    "bytes" : 20,
-                    "shutdown" : true
-                }
+                "linger" : 0
             }
         }
     ]

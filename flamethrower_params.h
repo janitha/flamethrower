@@ -7,68 +7,46 @@
 
 #include <boost/property_tree/ptree_fwd.hpp>
 
-// TODO(Janitha): Move the corresponding settings to their respective
 
+////////////////////////////////////////////////////////////////////////////////
 struct Params {
     Params(boost::property_tree::ptree &ptree);
 };
 
 ////////////////////////////////////////////////////////////////////////////////
-struct StreamWorkParams : public Params {
-
-    enum class StreamWorkType {
-        NONE,
-        ECHO,
-        RANDOM,
-        HTTP_CLIENT,
-        HTTP_SERVER
-    } type;
-
-    StreamWorkParams(boost::property_tree::ptree &ptree);
-    static StreamWorkParams* maker(boost::property_tree::ptree &ptree);
-};
-
-struct StreamWorkEchoParams : public StreamWorkParams {
-    StreamWorkEchoParams(boost::property_tree::ptree &ptree);
-};
-
-struct StreamWorkRandomParams : public StreamWorkParams {
-    uint32_t bytes;
-    bool shutdown;
-
-    StreamWorkRandomParams(boost::property_tree::ptree &ptree);
-};
-
-struct StreamWorkHttpClientParams : public StreamWorkParams {
-    StreamWorkHttpClientParams(boost::property_tree::ptree &ptree);
-};
-
-struct StreamWorkHttpServerParams : public StreamWorkParams {
-
-    StreamWorkHttpServerParams(boost::property_tree::ptree &ptree);
-};
-
-////////////////////////////////////////////////////////////////////////////////
 struct TcpWorkerParams : public Params {
-
-    StreamWorkParams *work;
     int linger; // tcp linger as set via SO_LINGER
 
     TcpWorkerParams(boost::property_tree::ptree &ptree);
 };
 
 struct TcpServerWorkerParams : public TcpWorkerParams {
-
+    enum class WorkerType {
+        NONE,
+        ECHO
+    } type;
     TcpServerWorkerParams(boost::property_tree::ptree &ptree);
+    static TcpServerWorkerParams* maker(boost::property_tree::ptree &ptree);
 };
 
 struct TcpClientWorkerParams : public TcpWorkerParams {
-
+    enum class WorkerType {
+        NONE,
+        ECHO
+    } type;
     TcpClientWorkerParams(boost::property_tree::ptree &ptree);
+    static TcpClientWorkerParams* maker(boost::property_tree::ptree &ptree);
+};
+
+struct TcpServerEchoParams : public TcpServerWorkerParams {
+    TcpServerEchoParams(boost::property_tree::ptree &ptree);
+};
+
+struct TcpClientEchoParams : public TcpClientWorkerParams {
+    TcpClientEchoParams(boost::property_tree::ptree &ptree);
 };
 
 ////////////////////////////////////////////////////////////////////////////////
-
 struct FactoryParams : public Params {
 
     enum class FactoryType {

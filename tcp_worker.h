@@ -4,41 +4,51 @@
 #include "common.h"
 
 #include "tcp_factory.h"
-#include "stream_work.h"
 
 class TcpFactory;
 class TcpServerFactory;
 class TcpClientFactory;
-class StreamWork;
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Base class for TcpWorkers
 ////////////////////////////////////////////////////////////////////////////////
 class TcpWorker {
-private:
+public:
     static const size_t RECVBUF_SIZE = 1500;
     static const size_t SENDBUF_SIZE = 1500;
-public:
-    struct ev_loop *loop;
+
     TcpFactory &factory;
     TcpWorkerParams &params;
 
-    StreamWork *work;
-
     int sock;
+
     struct ev_io sock_r_ev;
     struct ev_io sock_w_ev;
 
     std::list<TcpWorker*>::iterator workers_list_pos;
 
-    TcpWorker(struct ev_loop *loop, TcpFactory &factory, TcpWorkerParams &params, int sock=-1);
+    enum class sock_act {
+        CONTINUE,
+        CLOSE,
+        ERROR
+    };
+
+    TcpWorker(TcpFactory &factory, TcpWorkerParams &params, int sock=-1);
     virtual ~TcpWorker();
 
+    // Socket abstractions
+    virtual sock_act recv_buf(char *buf, size_t buflen, size_t &recvlen);
+    virtual sock_act send_buf(char *buf, size_t buflen, size_t &sentlen);
+
+    // Event callbacks
     static void read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
     virtual void read_cb();
-
     static void write_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
     virtual void write_cb();
+
+    // Misc abstractions
+    void echo();
 };
 
 
@@ -49,8 +59,10 @@ class TcpServerWorker : public TcpWorker {
 private:
     TcpServerWorkerParams &params;
 public:
-    TcpServerWorker(struct ev_loop *loop, TcpServerFactory &factory, TcpServerWorkerParams &params, int sock);
+    TcpServerWorker(TcpServerFactory &factory, TcpServerWorkerParams &params, int sock);
     virtual ~TcpServerWorker();
+
+    static TcpServerWorker* maker(TcpServerFactory &factory, TcpServerWorkerParams &params, int sock);
 };
 
 
@@ -62,14 +74,44 @@ private:
     TcpClientWorkerParams &params;
     struct ev_timer sock_timeout;
 public:
-    TcpClientWorker(struct ev_loop *loop, TcpClientFactory &factory, TcpClientWorkerParams &params);
+    TcpClientWorker(TcpClientFactory &factory, TcpClientWorkerParams &params);
     virtual ~TcpClientWorker();
+
+    static TcpClientWorker* maker(TcpClientFactory &factory, TcpClientWorkerParams &params);
 
     static void connected_cb(struct ev_loop *loop, struct ev_io *watcher,int revents);
     virtual void connected_cb();
 
     static void timeout_cb(struct ev_loop *loop, struct ev_timer *watcher, int revents);
     virtual void timeout_cb();
+};
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Tcp echo server
+////////////////////////////////////////////////////////////////////////////////
+class TcpServerEcho : public TcpServerWorker {
+private:
+    TcpServerEchoParams &params;
+public:
+    TcpServerEcho(TcpServerFactory &factory, TcpServerEchoParams &params, int sock);
+    virtual ~TcpServerEcho();
+
+    virtual void read_cb();
+};
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Tcp echo client
+////////////////////////////////////////////////////////////////////////////////
+class TcpClientEcho : public TcpClientWorker {
+private:
+    TcpClientEchoParams &params;
+public:
+    TcpClientEcho(TcpClientFactory &factory, TcpClientEchoParams &params);
+    virtual ~TcpClientEcho();
+
+    virtual void read_cb();
 };
 
 

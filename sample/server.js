@@ -13,11 +13,9 @@
             "accept_backlog" : 10,
 
             "worker" : {
-                "linger" : 0,
+                "type" : "echo",
 
-                "work" : {
-                    "type" : "http_server"
-                }
+                "linger" : 0
             }
         }
     ]

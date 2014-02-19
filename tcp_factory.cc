@@ -83,7 +83,7 @@ void TcpFactory::stats_cb(struct ev_loop *loop,
 }
 
 void TcpFactory::stats_cb() {
-    printf("bytes_in=%d bytes_out=%d workers=%d\n",
+    printf("bytes_in=%lu bytes_out=%lu workers=%zu\n",
            bytes_in,
            bytes_out,
            workers.size());
@@ -198,7 +198,7 @@ void TcpServerFactory::accept_cb() {
     debug_socket_print(client_sd, "accepted\n");
 
     // New worker
-    new TcpServerWorker(loop, *this, *params.worker, client_sd);
+    TcpServerWorker::maker(*this, *params.worker, client_sd);
 
 }
 
@@ -242,7 +242,7 @@ void TcpClientFactory::factory_cb() {
 void TcpClientFactory::create_connection() {
 
     // New worker
-    new TcpClientWorker(loop, *this, *params.worker);
+    TcpClientWorker::maker(*this, *params.worker);
 
 }
 
