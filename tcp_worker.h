@@ -145,4 +145,48 @@ public:
     virtual void write_cb();
 };
 
+
+////////////////////////////////////////////////////////////////////////////////
+// Http server
+////////////////////////////////////////////////////////////////////////////////
+class TcpServerHttp : public TcpServerWorker {
+private:
+    TcpServerHttpParams &params;
+
+    const char* res_header_ptr;
+    uint32_t res_header_remaining;
+
+    const char* res_body_ptr;
+    uint32_t res_body_remaining;
+
+    enum class ServerState {
+        REQUEST_HEADER,
+        REQUEST_BODY,
+        REQUEST_DONE,
+        RESPONSE_HEADER,
+        RESPONSE_BODY,
+        RESPONSE_DONE
+    } state;
+
+public:
+    TcpServerHttp(TcpServerFactory &factory, TcpServerHttpParams &params, int sock);
+    virtual ~TcpServerHttp();
+
+    virtual void read_cb();
+    virtual void write_cb();
+};
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Http server
+////////////////////////////////////////////////////////////////////////////////
+class TcpClientHttp : public TcpClientWorker {
+private:
+    TcpClientHttpParams &params;
+public:
+    TcpClientHttp(TcpClientFactory &factory, TcpClientHttpParams &params);
+    virtual ~TcpClientHttp();
+
+};
+
 #endif

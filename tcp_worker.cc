@@ -19,12 +19,6 @@ TcpWorker::~TcpWorker() {
     ev_io_stop(factory.loop, &sock_r_ev);
     ev_io_stop(factory.loop, &sock_w_ev);
 
-    /*
-    if(shutdown(sock, SHUT_RDWR) == -1) {
-        perror("socket shutdown error");
-    }
-    */
-
     if(close(sock) == -1) {
         perror("socket close error");
     }
@@ -113,48 +107,6 @@ void TcpWorker::read_cb() {
 
     debug_print("read bytes=%lu\n", recvlen);
 
-    /*
-
-    char sendbuf[SENDBUF_SIZE];
-    memset(sendbuf, 0, sizeof(sendbuf));
-    size_t sentlen = 0;
-
-    int hret;
-    if((hret=work->read_handler(recvbuf, recvlen, sendbuf, sizeof(sendbuf), sentlen)) < 0) {
-        perror("work handler error");
-        exit(EXIT_FAILURE);
-        // TODO(Janitha): Shutdown socket and kill the worker instead of exit
-    }
-
-    if(sentlen) {
-        // TODO(Janitha): Abstract the send to a single location (between cbs)
-        if(send(sock, sendbuf, sentlen, MSG_NOSIGNAL) < 0) {
-            if(errno == EPIPE) {
-                perror("socket error: broken pipe");
-            } else {
-                // TODO(Janitha): Handle non blocking send conditions
-                perror("send error");
-                exit(EXIT_FAILURE);
-            }
-        } else{
-            factory.bytes_out += sentlen;
-        }
-    }
-
-    if(hret == STREAMWORK_FINISHED) {
-        ev_io_stop(factory.loop, &sock_r_ev);
-    }
-
-    if(hret == STREAMWORK_SHUTDOWN) {
-
-        debug_socket_print(sock, "read shutdown\n");
-
-        ev_io_stop(factory.loop, &sock_r_ev);
-        //delete (TcpWorker*)worker; // TODO(Janitha): is this sane? what if the write side isn't done?
-    }
-
-    */
-
 }
 
 void TcpWorker::write_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
@@ -172,46 +124,6 @@ void TcpWorker::write_cb() {
 
     ev_io_stop(factory.loop, &sock_w_ev);
 
-    /*
-    char sendbuf[SENDBUF_SIZE];
-    memset(sendbuf, 0, sizeof(sendbuf));
-    size_t sentlen = 0;
-
-    int hret;
-    if((hret = work->handler(nullptr, 0, sendbuf, sizeof(sendbuf), sentlen)) < 0) {
-        // TODO(Janitha): Lets make this a bit more graceful
-        perror("work handler error");
-        exit(EXIT_FAILURE);
-    }
-
-    // TODO(Janitha): We can do TCP_CORK and TCP_NODELAY
-    if(send(sock, sendbuf, sentlen, MSG_NOSIGNAL) < 0) {
-        if(errno == EPIPE) {
-            perror("socket error: broken pipe");
-        } else {
-            // TODO(Janitha): Handle non blocking send conditions
-            perror("send error");
-            exit(EXIT_FAILURE);
-        }
-    } else {
-        factory.bytes_out += sentlen;
-    }
-
-    if(hret == STREAMWORK_FINISHED) {
-        debug_socket_print(sock, "finished\n");
-        ev_io_stop(factory.loop, &sock_w_ev);
-        return;
-    }
-
-    if(hret == STREAMWORK_SHUTDOWN) {
-        debug_socket_print(sock, "write shutdown\n");
-        ev_io_stop(factory.loop, &sock_w_ev);
-        shutdown(sock, SHUT_WR);
-        //delete this;
-        //return;
-    }
-
-    */
 }
 
 void TcpWorker::read_echo() {
@@ -277,7 +189,7 @@ void TcpWorker::write_random(uint32_t &len, bool shutdown) {
         return;
     }
 
-    debug_print("random: %du bytes\n", sentlen);
+    debug_print("random: %lu bytes\n", sentlen);
     len -= sentlen;
 
     if(!len) {
@@ -333,6 +245,9 @@ TcpServerWorker* TcpServerWorker::maker(TcpServerFactory &factory, TcpServerWork
         break;
     case TcpServerWorkerParams::WorkerType::RANDOM:
         return new TcpServerRandom(factory, (TcpServerRandomParams&)params, sock);
+        break;
+    case TcpServerWorkerParams::WorkerType::HTTP:
+        return new TcpServerHttp(factory, (TcpServerHttpParams&)params, sock);
         break;
     default:
         perror("error: invalid worker type\n");
@@ -430,6 +345,9 @@ TcpClientWorker* TcpClientWorker::maker(TcpClientFactory &factory, TcpClientWork
         break;
     case TcpClientWorkerParams::WorkerType::RANDOM:
         return new TcpClientRandom(factory, (TcpClientRandomParams&)params);
+        break;
+    case TcpClientWorkerParams::WorkerType::HTTP:
+        return new TcpClientHttp(factory, (TcpClientHttpParams&)params);
         break;
     default:
         perror("error: invalid worker type\n");
@@ -561,4 +479,212 @@ TcpClientRandom::~TcpClientRandom() {
 void TcpClientRandom::write_cb() {
     debug_print("called\n");
     TcpWorker::write_random(bytes_remaining, params.shutdown);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+TcpServerHttp::TcpServerHttp(TcpServerFactory &factory, TcpServerHttpParams &params, int sock)
+    : TcpServerWorker(factory, params, sock),
+      params(params),
+      state(ServerState::REQUEST_HEADER) {
+    debug_print("ctor\n");
+
+    static const char default_header[] =
+        "HTTP/1.1 200 OK\r\n"
+        "Server: Firehose\r\n"
+        "Content-Type: text/plain\r\n"
+        "\r\n";
+    static const char default_body[] =
+        "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod "
+        "tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim "
+        "veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea "
+        "commodo consequat. Duis aute irure dolor in reprehenderit in voluptate "
+        "velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat "
+        "cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id "
+        "est laborum.";
+
+    res_header_ptr = default_header;
+    res_header_remaining = sizeof(default_header) - 1;
+
+    res_body_ptr = default_body;
+    res_body_remaining = sizeof(default_body) - 1;
+}
+
+TcpServerHttp::~TcpServerHttp() {
+    debug_print("dtor\n");
+}
+
+void TcpServerHttp::read_cb() {
+    debug_print("called\n");
+
+    static const char header_terminator[] = { 0x0d, 0x0a, 0x0d, 0x0a, 0x0 };
+    char *header_end;
+
+    char recvbuf[RECVBUF_SIZE];
+    memset(recvbuf, 0, sizeof(recvbuf));
+    size_t recvlen;
+
+    // Switch for reading decision
+    switch(state) {
+    case ServerState::REQUEST_HEADER:
+    case ServerState::REQUEST_BODY:
+
+        // Switch for socket recv
+        switch(recv_buf(recvbuf, sizeof(recvbuf), recvlen)) {
+        case sock_act::CONTINUE:
+            break;
+        case sock_act::ERROR:
+            debug_socket_print(sock, "recv error\n");
+            // Fallthrough
+        case sock_act::CLOSE:
+            // Fallthrough
+        default:
+            delete this;
+            return;
+        }
+
+        break;
+
+    default:
+        return;
+    }
+
+    if(!recvlen) {
+        return;
+    }
+
+    debug_print("read %lu bytes\n", recvlen);
+
+    // Switch for action decision
+    switch(state) {
+    case ServerState::REQUEST_HEADER:
+        debug_print("state=request_header\n");
+
+        // TODO(Janitha): For lazy/pragmetic/perf reasons, lets just "assume"
+        //                that the header termination "0D0A0D0A" isn't cross bufs
+
+        char *header_end;
+        if((header_end = std::strstr(recvbuf, header_terminator)) == nullptr) {
+            // Header teminator not found
+            break;
+        }
+
+        header_end += sizeof(header_terminator);
+
+        // TODO(Janitha): Do smoething with the header here
+
+        state = ServerState::REQUEST_BODY;
+        // Fallthrough
+
+    case ServerState::REQUEST_BODY:
+        debug_print("state=request_body\n");
+
+        // TODO(Janitha): Implement handling request body, RFC 2616 4.4
+
+        state = ServerState::REQUEST_DONE;
+        // Fallthrough
+
+    case ServerState::REQUEST_DONE:
+        debug_print("state=request_done\n");
+
+        ev_io_start(factory.loop, &sock_w_ev);
+
+        state = ServerState::RESPONSE_HEADER;
+        // Fallthrough
+
+    default:
+        debug_print("state=default\n");
+
+        break;
+    }
+
+    return;
+
+}
+
+void TcpServerHttp::write_cb() {
+    debug_print("called\n");
+
+    size_t sendlen = 0;
+    size_t sentlen = 0;
+
+    // Switch for action decision
+    switch(state) {
+    case ServerState::RESPONSE_HEADER:
+        debug_print("state=response_header\n");
+
+        sendlen = (SENDBUF_SIZE < res_header_remaining) ? SENDBUF_SIZE : res_header_remaining;
+
+        // Switch for socket send
+        switch(send_buf((char*)res_header_ptr, sendlen, sentlen)) {
+        case sock_act::CONTINUE:
+            break;
+        case sock_act::ERROR:
+            debug_socket_print(sock, "send error\n");
+            // Fallthrough
+        case sock_act::CLOSE:
+            // Fallthrough
+            delete this;
+            return;
+        }
+
+        res_header_ptr += sentlen;
+        res_header_remaining -= sentlen;
+
+        if(res_header_remaining) {
+            break;
+        }
+
+        state = ServerState::RESPONSE_BODY;
+        // Fallthrough
+
+    case ServerState::RESPONSE_BODY:
+        debug_print("state=response_body\n");
+
+        sendlen = (SENDBUF_SIZE < res_body_remaining) ? SENDBUF_SIZE : res_body_remaining;
+
+        // Switch for socket send
+        switch(send_buf((char*)res_body_ptr, sendlen, sentlen)) {
+        case sock_act::CONTINUE:
+            break;
+        case sock_act::ERROR:
+            debug_socket_print(sock, "send error\n");
+            // Fallthrough
+        case sock_act::CLOSE:
+            // Fallthrough
+            delete this;
+            return;
+        }
+
+        res_body_ptr += sentlen;
+        res_body_remaining -= sentlen;
+
+        if(res_body_remaining) {
+            break;
+        }
+
+        state = ServerState::RESPONSE_DONE;
+        // Fallthrough
+
+    case ServerState::RESPONSE_DONE:
+        debug_print("state=response_done\n");
+
+        // TODO(Janitha): We may want to do a half close here
+        delete this;
+        return;
+
+    default:
+        ev_io_stop(factory.loop, &sock_w_ev);
+        return;
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+TcpClientHttp::TcpClientHttp(TcpClientFactory &factory, TcpClientHttpParams &params)
+    : TcpClientWorker(factory, params),
+      params(params) {
+    debug_print("ctor\n");
+}
+
+TcpClientHttp::~TcpClientHttp() {
+    debug_print("dtor\n");
 }

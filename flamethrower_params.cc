@@ -28,6 +28,8 @@ TcpServerWorkerParams* TcpServerWorkerParams::maker(boost::property_tree::ptree 
         return new TcpServerEchoParams(ptree);
     } else if(worker_type == "random") {
         return new TcpServerRandomParams(ptree);
+    } else if(worker_type == "http") {
+        return new TcpServerHttpParams(ptree);
     } else {
         printf("error: invalid factory type\n");
         exit(EXIT_FAILURE);
@@ -45,6 +47,8 @@ TcpClientWorkerParams* TcpClientWorkerParams::maker(boost::property_tree::ptree 
         return new TcpClientEchoParams(ptree);
     } else if(worker_type == "random") {
         return new TcpClientRandomParams(ptree);
+    } else if(worker_type == "http") {
+        return new TcpClientHttpParams(ptree);
     } else {
         printf("error: invalid factory type\n");
         exit(EXIT_FAILURE);
@@ -81,6 +85,18 @@ TcpClientRandomParams::TcpClientRandomParams(boost::property_tree::ptree &ptree)
     type = WorkerType::RANDOM;
     bytes = ptree.get<uint32_t>("bytes");
     shutdown = ptree.get<bool>("shutdown");
+}
+
+TcpServerHttpParams::TcpServerHttpParams(boost::property_tree::ptree &ptree)
+    : TcpServerWorkerParams(ptree) {
+
+    type = WorkerType::HTTP;
+}
+
+TcpClientHttpParams::TcpClientHttpParams(boost::property_tree::ptree &ptree)
+    : TcpClientWorkerParams(ptree) {
+
+    type = WorkerType::HTTP;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

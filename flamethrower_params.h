@@ -24,7 +24,8 @@ struct TcpServerWorkerParams : public TcpWorkerParams {
     enum class WorkerType {
         NONE,
         ECHO,
-        RANDOM
+        RANDOM,
+        HTTP
     } type;
     TcpServerWorkerParams(boost::property_tree::ptree &ptree);
     static TcpServerWorkerParams* maker(boost::property_tree::ptree &ptree);
@@ -34,7 +35,8 @@ struct TcpClientWorkerParams : public TcpWorkerParams {
     enum class WorkerType {
         NONE,
         ECHO,
-        RANDOM
+        RANDOM,
+        HTTP
     } type;
     TcpClientWorkerParams(boost::property_tree::ptree &ptree);
     static TcpClientWorkerParams* maker(boost::property_tree::ptree &ptree);
@@ -58,6 +60,14 @@ struct TcpClientRandomParams : public TcpClientWorkerParams {
     uint32_t bytes;
     bool shutdown;
     TcpClientRandomParams(boost::property_tree::ptree &ptree);
+};
+
+struct TcpServerHttpParams : public TcpServerWorkerParams {
+    TcpServerHttpParams(boost::property_tree::ptree &ptree);
+};
+
+struct TcpClientHttpParams : public TcpClientWorkerParams {
+    TcpClientHttpParams(boost::property_tree::ptree &ptree);
 };
 
 ////////////////////////////////////////////////////////////////////////////////
