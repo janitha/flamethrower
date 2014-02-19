@@ -111,6 +111,7 @@ void TcpWorker::read_cb() {
         return;
     }
 
+    debug_print("read bytes=%lu\n", recvlen);
 
     /*
 
@@ -213,7 +214,9 @@ void TcpWorker::write_cb() {
     */
 }
 
-void TcpWorker::echo() {
+void TcpWorker::read_echo() {
+
+    debug_print("called\n");
 
     char buf[RECVBUF_SIZE];
     memset(buf, 0, sizeof(buf));
@@ -246,7 +249,45 @@ void TcpWorker::echo() {
         delete this;
         return;
     }
+}
 
+void TcpWorker::write_random(uint32_t &len, bool shutdown) {
+
+    debug_print("called len=%du\n", len);
+
+    char buf[SENDBUF_SIZE];
+    memset(buf, 0, sizeof(buf));
+
+    uint32_t sz = (len >= sizeof(buf)) ? sizeof(buf) : len;
+    for(uint32_t i=0; i<sz; i++) {
+        // Random printable ascii
+        buf[i] = '!' + (std::rand()%93);
+    }
+
+    size_t sentlen;
+    switch(send_buf(buf, len >= sizeof(buf) ? sizeof(buf) : len, sentlen)) {
+    case sock_act::CONTINUE:
+        break;
+    case sock_act::ERROR:
+        debug_socket_print(sock, "send error\n");
+        // Fallthrough
+    case sock_act::CLOSE:
+        // Fallthrough
+        delete this;
+        return;
+    }
+
+    debug_print("random: %du bytes\n", sentlen);
+    len -= sentlen;
+
+    if(!len) {
+        if(shutdown) {
+            delete this;
+            return;
+        } else {
+            ev_io_stop(factory.loop, &sock_w_ev);
+        }
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -289,6 +330,9 @@ TcpServerWorker* TcpServerWorker::maker(TcpServerFactory &factory, TcpServerWork
     switch(params.type) {
     case TcpServerWorkerParams::WorkerType::ECHO:
         return new TcpServerEcho(factory, (TcpServerEchoParams&)params, sock);
+        break;
+    case TcpServerWorkerParams::WorkerType::RANDOM:
+        return new TcpServerRandom(factory, (TcpServerRandomParams&)params, sock);
         break;
     default:
         perror("error: invalid worker type\n");
@@ -384,6 +428,9 @@ TcpClientWorker* TcpClientWorker::maker(TcpClientFactory &factory, TcpClientWork
     case TcpClientWorkerParams::WorkerType::ECHO:
         return new TcpClientEcho(factory, (TcpClientEchoParams&)params);
         break;
+    case TcpClientWorkerParams::WorkerType::RANDOM:
+        return new TcpClientRandom(factory, (TcpClientRandomParams&)params);
+        break;
     default:
         perror("error: invalid worker type\n");
         exit(EXIT_FAILURE);
@@ -463,7 +510,7 @@ TcpServerEcho::~TcpServerEcho() {
 
 void TcpServerEcho::read_cb() {
     debug_print("called\n");
-    return TcpWorker::echo();
+    return TcpWorker::read_echo();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -479,5 +526,39 @@ TcpClientEcho::~TcpClientEcho() {
 
 void TcpClientEcho::read_cb() {
     debug_print("called\n");
-    return TcpWorker::echo();
+    return TcpWorker::read_echo();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+TcpServerRandom::TcpServerRandom(TcpServerFactory &factory, TcpServerRandomParams &params, int sock)
+    : TcpServerWorker(factory, params, sock),
+      params(params),
+      bytes_remaining(params.bytes) {
+    debug_print("ctor\n");
+}
+
+TcpServerRandom::~TcpServerRandom() {
+    debug_print("dtor\n");
+}
+
+void TcpServerRandom::write_cb() {
+    debug_print("called\n");
+    return TcpWorker::write_random(bytes_remaining, params.shutdown);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+TcpClientRandom::TcpClientRandom(TcpClientFactory &factory, TcpClientRandomParams &params)
+    : TcpClientWorker(factory, params),
+      params(params),
+      bytes_remaining(params.bytes) {
+    debug_print("ctor\n");
+}
+
+TcpClientRandom::~TcpClientRandom() {
+    debug_print("dtor\n");
+}
+
+void TcpClientRandom::write_cb() {
+    debug_print("called\n");
+    TcpWorker::write_random(bytes_remaining, params.shutdown);
 }

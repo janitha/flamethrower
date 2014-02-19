@@ -48,7 +48,8 @@ public:
     virtual void write_cb();
 
     // Misc abstractions
-    void echo();
+    void read_echo();
+    void write_random(uint32_t &len, bool shutdown);
 };
 
 
@@ -114,5 +115,34 @@ public:
     virtual void read_cb();
 };
 
+
+////////////////////////////////////////////////////////////////////////////////
+// Tcp random server
+////////////////////////////////////////////////////////////////////////////////
+class TcpServerRandom : public TcpServerWorker {
+private:
+    TcpServerRandomParams &params;
+    uint32_t bytes_remaining;
+public:
+    TcpServerRandom(TcpServerFactory &factory, TcpServerRandomParams &params, int sock);
+    virtual ~TcpServerRandom();
+
+    virtual void write_cb();
+};
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Tcp random client
+////////////////////////////////////////////////////////////////////////////////
+class TcpClientRandom : public TcpClientWorker {
+private:
+    TcpClientRandomParams &params;
+    uint32_t bytes_remaining;
+public:
+    TcpClientRandom(TcpClientFactory &factory, TcpClientRandomParams &params);
+    virtual ~TcpClientRandom();
+
+    virtual void write_cb();
+};
 
 #endif

@@ -26,6 +26,8 @@ TcpServerWorkerParams* TcpServerWorkerParams::maker(boost::property_tree::ptree 
     std::string worker_type = ptree.get<std::string>("type");
     if(worker_type == "echo") {
         return new TcpServerEchoParams(ptree);
+    } else if(worker_type == "random") {
+        return new TcpServerRandomParams(ptree);
     } else {
         printf("error: invalid factory type\n");
         exit(EXIT_FAILURE);
@@ -41,6 +43,8 @@ TcpClientWorkerParams* TcpClientWorkerParams::maker(boost::property_tree::ptree 
     std::string worker_type = ptree.get<std::string>("type");
     if(worker_type == "echo") {
         return new TcpClientEchoParams(ptree);
+    } else if(worker_type == "random") {
+        return new TcpClientRandomParams(ptree);
     } else {
         printf("error: invalid factory type\n");
         exit(EXIT_FAILURE);
@@ -61,6 +65,22 @@ TcpClientEchoParams::TcpClientEchoParams(boost::property_tree::ptree &ptree)
     : TcpClientWorkerParams(ptree) {
 
     type = WorkerType::ECHO;
+}
+
+TcpServerRandomParams::TcpServerRandomParams(boost::property_tree::ptree &ptree)
+    : TcpServerWorkerParams(ptree) {
+
+    type = WorkerType::RANDOM;
+    bytes = ptree.get<uint32_t>("bytes");
+    shutdown = ptree.get<bool>("shutdown");
+}
+
+TcpClientRandomParams::TcpClientRandomParams(boost::property_tree::ptree &ptree)
+    : TcpClientWorkerParams(ptree) {
+
+    type = WorkerType::RANDOM;
+    bytes = ptree.get<uint32_t>("bytes");
+    shutdown = ptree.get<bool>("shutdown");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
