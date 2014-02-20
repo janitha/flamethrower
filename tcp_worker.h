@@ -160,9 +160,11 @@ private:
     uint32_t res_body_remaining;
 
     enum class ServerState {
+        REQUEST_FIRSTLINE,
         REQUEST_HEADER,
         REQUEST_BODY,
         REQUEST_DONE,
+        RESPONSE_FIRSTLINE,
         RESPONSE_HEADER,
         RESPONSE_BODY,
         RESPONSE_DONE
@@ -186,6 +188,9 @@ private:
 public:
     TcpClientHttp(TcpClientFactory &factory, TcpClientHttpParams &params);
     virtual ~TcpClientHttp();
+
+    virtual void read_cb();
+    virtual void write_cb();
 
 };
 

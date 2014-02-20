@@ -485,7 +485,7 @@ void TcpClientRandom::write_cb() {
 TcpServerHttp::TcpServerHttp(TcpServerFactory &factory, TcpServerHttpParams &params, int sock)
     : TcpServerWorker(factory, params, sock),
       params(params),
-      state(ServerState::REQUEST_HEADER) {
+      state(ServerState::REQUEST_FIRSTLINE) {
     debug_print("ctor\n");
 
     res_header_ptr = params.header_payload_ptr;
@@ -502,20 +502,22 @@ TcpServerHttp::~TcpServerHttp() {
 void TcpServerHttp::read_cb() {
     debug_print("called\n");
 
-    static const char header_terminator[] = { 0x0d, 0x0a, 0x0d, 0x0a, 0x0 };
-    char *header_end;
+    static const char CRLFCRLF[] = { 0x0d, 0x0a, 0x0d, 0x0a, 0x0 };
+    static const char CRLF[] = { 0x0d, 0x0a, 0x0 };
 
-    char recvbuf[RECVBUF_SIZE];
+    char recvbuf_array[RECVBUF_SIZE];
+    char *recvbuf = recvbuf_array;
     memset(recvbuf, 0, sizeof(recvbuf));
     size_t recvlen;
 
     // Switch for reading decision
     switch(state) {
+    case ServerState::REQUEST_FIRSTLINE:
     case ServerState::REQUEST_HEADER:
     case ServerState::REQUEST_BODY:
 
         // Switch for socket recv
-        switch(recv_buf(recvbuf, sizeof(recvbuf), recvlen)) {
+        switch(recv_buf(recvbuf_array, sizeof(recvbuf_array), recvlen)) {
         case sock_act::CONTINUE:
             break;
         case sock_act::ERROR:
@@ -542,6 +544,33 @@ void TcpServerHttp::read_cb() {
 
     // Switch for action decision
     switch(state) {
+
+    case ServerState::REQUEST_FIRSTLINE:
+        debug_print("state=request_firstline\n");
+
+        // TODO(Janitha): For lazy/pragmetic/perf reasons, lets just "assume"
+        //                that the termination isn't cross bufs
+
+        char *firstline_end;
+        if((firstline_end = std::strstr(recvbuf, CRLF)) == nullptr) {
+            // first line end not found
+            break;
+        }
+
+        firstline_end += sizeof(CRLF);
+
+        // TODO(Janitha): Do something with the first line
+
+        recvlen -= firstline_end - recvbuf;
+        recvbuf = firstline_end;
+
+        if(!recvlen) {
+            break;
+        }
+
+        state = ServerState::REQUEST_HEADER;
+        // Fallthrough
+
     case ServerState::REQUEST_HEADER:
         debug_print("state=request_header\n");
 
@@ -549,14 +578,17 @@ void TcpServerHttp::read_cb() {
         //                that the header termination "0D0A0D0A" isn't cross bufs
 
         char *header_end;
-        if((header_end = std::strstr(recvbuf, header_terminator)) == nullptr) {
+        if((header_end = std::strstr(recvbuf, CRLFCRLF)) == nullptr) {
             // Header teminator not found
             break;
         }
 
-        header_end += sizeof(header_terminator);
+        header_end += sizeof(CRLFCRLF);
 
         // TODO(Janitha): Do smoething with the header here
+
+        recvlen -= header_end - recvbuf;
+        recvbuf = header_end;
 
         state = ServerState::REQUEST_BODY;
         // Fallthrough
@@ -674,4 +706,12 @@ TcpClientHttp::TcpClientHttp(TcpClientFactory &factory, TcpClientHttpParams &par
 
 TcpClientHttp::~TcpClientHttp() {
     debug_print("dtor\n");
+}
+
+void TcpClientHttp::read_cb() {
+
+}
+
+void TcpClientHttp::write_cb() {
+
 }
