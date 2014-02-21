@@ -31,7 +31,7 @@ public:
 
     std::list<TcpWorker*>::iterator workers_list_pos;
 
-    enum class sock_act {
+    enum class SockAct {
         CONTINUE,
         CLOSE,
         ERROR
@@ -41,8 +41,8 @@ public:
     virtual ~TcpWorker();
 
     // Socket abstractions
-    sock_act recv_buf(char *buf, size_t buflen, size_t &recvlen);
-    sock_act send_buf(char *buf, size_t buflen, size_t &sentlen);
+    SockAct recv_buf(char *buf, size_t buflen, size_t &recvlen);
+    SockAct send_buf(char *buf, size_t buflen, size_t &sentlen);
     void tcp_cork(bool state);
 
     // Event callbacks
@@ -52,8 +52,8 @@ public:
     virtual void write_cb();
 
     // Misc abstractions
-    sock_act read_echo();
-    sock_act write_payloads(PayloadList &payloads, size_t sendlen, size_t &sentlen);
+    SockAct read_echo();
+    SockAct write_payloads(PayloadList &payloads, size_t sendlen, size_t &sentlen);
 };
 
 
@@ -192,6 +192,19 @@ class TcpClientHttp : public TcpClientWorker {
 private:
     TcpClientHttpParams &params;
 public:
+
+    enum class ClientState {
+        REQUEST_FIRSTLINE,
+        REQUEST_HEADER,
+        REQUEST_BODY,
+        REQUEST_DONE,
+        RESPONSE_FIRSTLINE,
+        RESPONSE_HEADER,
+        RESPONES_BODY,
+        RESPONSE_DONE
+    } state;
+
+
     TcpClientHttp(TcpClientFactory &factory, TcpClientHttpParams &params);
     virtual ~TcpClientHttp();
 
