@@ -19,23 +19,27 @@
                     {
                         "type" : "random",
                         "length" : 10
-                    },
-                    {
+                    }, {
                         "type" : "file",
                         "filename" : "sample/helloworld.payload"
-                    },
-                    {
+                    }, {
                         "type" : "random",
                         "length" : 10
-                    },
-                    {
+                    }, {
                         "type" : "string",
                         "string" : "Janitha Karunaratne"
-                    },
-                    {
+                    }, {
+                        "type" : "http_headers",
+                        "fields" : {
+                            "1stfield" : "1stvalue",
+                            "SuchMystery" : "wow",
+                            "herp" : "derp"
+                        }
+                    }, {
                         "type" : "string",
-                        "string" : "Janitha Karunaratne"
+                        "string" : "end\r\n\r\n"
                     }
+
                 ],
 
                 "shutdown" : true,

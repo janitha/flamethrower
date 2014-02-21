@@ -1,8 +1,10 @@
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <string>
 #include <map>
 #include <cstdlib>
+
 
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
@@ -19,7 +21,6 @@ Params::Params(boost::property_tree::ptree &ptree) {
 ////////////////////////////////////////////////////////////////////////////////
 PayloadParams::PayloadParams(boost::property_tree::ptree &ptree)
     : Params(ptree) {
-
 }
 
 PayloadParams* PayloadParams::maker(boost::property_tree::ptree &ptree) {
@@ -65,8 +66,8 @@ PayloadStringParams::PayloadStringParams(boost::property_tree::ptree &ptree)
 
     std::string str = ptree.get<std::string>("string");
     payload_len = str.size();
-    payload_ptr = new char[str.size()];
-    memcpy(payload_ptr, str.c_str(), str.size());
+    payload_ptr = new char[payload_len];
+    memcpy(payload_ptr, str.c_str(), payload_len);
 }
 
 PayloadFileParams::PayloadFileParams(boost::property_tree::ptree &ptree)
@@ -90,6 +91,18 @@ PayloadHttpHeadersParams::PayloadHttpHeadersParams(boost::property_tree::ptree &
     : PayloadBufAbstractParams(ptree) {
 
     type = PayloadType::HTTP_HEADERS;
+
+    std::stringstream header_ss;
+    for(auto &header_pair : ptree.get_child("fields")) {
+
+        header_ss << std::string(header_pair.first.data())
+                  << " : "
+                  << std::string(header_pair.second.data())
+                  << "\r\n";
+    }
+    payload_len = header_ss.str().size();
+    payload_ptr = new char[payload_len];
+    memcpy(payload_ptr, header_ss.str().c_str(), payload_len);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -229,7 +242,7 @@ TcpFactoryParams::TcpFactoryParams(boost::property_tree::ptree &ptree)
     bind_addr = inet_addr(ptree.get<std::string>("bind_addr").c_str());
     bind_port = htons(ptree.get<uint16_t>("bind_port"));
     concurrency  = ptree.get<uint32_t>("concurrency");
-    count = ptree.get<uint32_t>("count");
+    count = ptree.get<uint64_t>("count");
 }
 
 TcpServerFactoryParams::TcpServerFactoryParams(boost::property_tree::ptree &ptree)

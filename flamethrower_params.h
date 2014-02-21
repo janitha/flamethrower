@@ -165,7 +165,7 @@ struct TcpFactoryParams : public FactoryParams {
     uint32_t bind_addr;       // htonl(INADDR_ANY)
     uint16_t bind_port;       // htons(9999)
     uint32_t concurrency;
-    uint32_t count;
+    uint64_t count;
 
     TcpFactoryParams(boost::property_tree::ptree &ptree);
 };

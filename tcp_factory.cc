@@ -91,9 +91,13 @@ void TcpFactory::stats_cb(struct ev_loop *loop,
 }
 
 void TcpFactory::stats_cb() {
-    printf("bytes_in=%lu bytes_out=%lu workers=%zu\n",
+    printf("bytes_in=%lu "
+           "bytes_out=%lu "
+           "count=%lu "
+           "workers=%zu\n",
            bytes_in,
            bytes_out,
+           cumulative_count,
            workers.size());
 }
 
