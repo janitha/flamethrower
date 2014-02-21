@@ -2,6 +2,7 @@
 #include <fstream>
 #include <string>
 #include <map>
+#include <cstdlib>
 
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
@@ -16,6 +17,57 @@ Params::Params(boost::property_tree::ptree &ptree) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+PayloadParams::PayloadParams(boost::property_tree::ptree &ptree) {
+
+}
+
+PayloadParams* PayloadParams::maker(boost::property_tree::ptree &ptree) {
+
+    std::string payload_type = ptree.get<std::string>("type");
+    if(payload_type == "random") {
+        return new PayloadRandomParams(ptree);
+    } else if(payload_type == "file") {
+        return new PayloadFileParams(ptree);
+    } else {
+        printf("error: invalid payload type\n");
+        exit(EXIT_FAILURE);
+    }
+
+}
+
+PayloadRandomParams::PayloadRandomParams(boost::property_tree::ptree &ptree)
+    : PayloadParams(ptree) {
+
+    type = PayloadType::RANDOM;
+
+    payload_len = ptree.get<size_t>("length");
+
+    for(size_t i = 0; i<RANDOM_BUF_SIZE; i++) {
+        // Random printable ascii
+        random_buf[i] = '!' + (std::rand()%93);
+    }
+
+}
+
+PayloadFileParams::PayloadFileParams(boost::property_tree::ptree &ptree)
+    : PayloadParams(ptree) {
+
+    type = PayloadType::FILE;
+
+    std::ifstream payload_file(ptree.get<std::string>("filename"), std::ios::in | std::ios::binary);
+    if(!payload_file) {
+        perror("error: invalid payload file");
+        exit(EXIT_FAILURE);
+    }
+    payload_file.seekg(0, payload_file.end);
+    payload_len = payload_file.tellg();
+    payload_file.seekg(0, payload_file.beg);
+    payload_ptr = new char[payload_len]; // TODO(Janitha): Cleanup in dtor
+    payload_file.read(payload_ptr, payload_len);
+
+}
+
+////////////////////////////////////////////////////////////////////////////////
 TcpWorkerParams::TcpWorkerParams(boost::property_tree::ptree &ptree)
     : Params(ptree) {
 
@@ -27,12 +79,12 @@ TcpServerWorkerParams* TcpServerWorkerParams::maker(boost::property_tree::ptree 
     std::string worker_type = ptree.get<std::string>("type");
     if(worker_type == "echo") {
         return new TcpServerEchoParams(ptree);
-    } else if(worker_type == "random") {
-        return new TcpServerRandomParams(ptree);
+    } else if(worker_type == "raw") {
+        return new TcpServerRawParams(ptree);
     } else if(worker_type == "http") {
         return new TcpServerHttpParams(ptree);
     } else {
-        printf("error: invalid factory type\n");
+        printf("error: invalid worker type\n");
         exit(EXIT_FAILURE);
     }
 }
@@ -46,12 +98,12 @@ TcpClientWorkerParams* TcpClientWorkerParams::maker(boost::property_tree::ptree 
     std::string worker_type = ptree.get<std::string>("type");
     if(worker_type == "echo") {
         return new TcpClientEchoParams(ptree);
-    } else if(worker_type == "random") {
-        return new TcpClientRandomParams(ptree);
+    } else if(worker_type == "raw") {
+        return new TcpClientRawParams(ptree);
     } else if(worker_type == "http") {
         return new TcpClientHttpParams(ptree);
     } else {
-        printf("error: invalid factory type\n");
+        printf("error: invalid worker type\n");
         exit(EXIT_FAILURE);
     }
 }
@@ -62,29 +114,35 @@ TcpClientWorkerParams::TcpClientWorkerParams(boost::property_tree::ptree &ptree)
 
 TcpServerEchoParams::TcpServerEchoParams(boost::property_tree::ptree &ptree)
     : TcpServerWorkerParams(ptree) {
-
     type = WorkerType::ECHO;
 }
 
 TcpClientEchoParams::TcpClientEchoParams(boost::property_tree::ptree &ptree)
     : TcpClientWorkerParams(ptree) {
-
     type = WorkerType::ECHO;
 }
 
-TcpServerRandomParams::TcpServerRandomParams(boost::property_tree::ptree &ptree)
+TcpServerRawParams::TcpServerRawParams(boost::property_tree::ptree &ptree)
     : TcpServerWorkerParams(ptree) {
 
-    type = WorkerType::RANDOM;
-    bytes = ptree.get<uint32_t>("bytes");
+    type = WorkerType::RAW;
+
+    for(auto &payload_pair : ptree.get_child("payloads")) {
+        payloads.push_back(PayloadParams::maker(payload_pair.second));
+    }
+
     shutdown = ptree.get<bool>("shutdown");
 }
 
-TcpClientRandomParams::TcpClientRandomParams(boost::property_tree::ptree &ptree)
+TcpClientRawParams::TcpClientRawParams(boost::property_tree::ptree &ptree)
     : TcpClientWorkerParams(ptree) {
 
-    type = WorkerType::RANDOM;
-    bytes = ptree.get<uint32_t>("bytes");
+    type = WorkerType::RAW;
+
+    for(auto &payload_pair : ptree.get_child("payloads")) {
+        payloads.push_back(PayloadParams::maker(payload_pair.second));
+    }
+
     shutdown = ptree.get<bool>("shutdown");
 }
 
@@ -133,7 +191,6 @@ TcpServerHttpParams::TcpServerHttpParams(boost::property_tree::ptree &ptree)
 
 TcpClientHttpParams::TcpClientHttpParams(boost::property_tree::ptree &ptree)
     : TcpClientWorkerParams(ptree) {
-
     type = WorkerType::HTTP;
 }
 
@@ -168,6 +225,7 @@ TcpServerFactoryParams::TcpServerFactoryParams(boost::property_tree::ptree &ptre
     : TcpFactoryParams(ptree) {
 
     type = FactoryType::TCP_SERVER;
+
     accept_backlog = ptree.get<uint32_t>("accept_backlog");
 
     worker = TcpServerWorkerParams::maker(ptree.get_child("worker"));
@@ -177,6 +235,7 @@ TcpClientFactoryParams::TcpClientFactoryParams(boost::property_tree::ptree &ptre
     : TcpFactoryParams(ptree) {
 
     type = FactoryType::TCP_CLIENT;
+
     server_addr = inet_addr(ptree.get<std::string>("server_addr").c_str());
     server_port = htons(ptree.get<uint16_t>("server_port"));
     connect_timeout = ptree.get<float>("connect_timeout");

@@ -37,6 +37,8 @@ TcpFactory::TcpFactory(struct ev_loop *loop,
       bytes_in(0),
       bytes_out(0) {
 
+    debug_print("ctor\n");
+
     stats_timer.data = this;
     ev_timer_init(&stats_timer, stats_cb, 0, 1.0);
     ev_timer_start(loop, &stats_timer);
@@ -50,10 +52,16 @@ TcpFactory::TcpFactory(struct ev_loop *loop,
 
 TcpFactory::~TcpFactory() {
 
+    debug_print("dtor\n");
+
     ev_async_stop(loop, &factory_async);
     ev_timer_stop(loop, &stats_timer);
 
-    // TODO(Janitha): Free the workers
+    while(!workers.empty()) {
+        delete workers.front();
+        workers.pop_front();
+    }
+
 }
 
 void TcpFactory::factory_cb(struct ev_loop *loop,
@@ -115,7 +123,10 @@ TcpServerFactory::TcpServerFactory(struct ev_loop *loop,
 }
 
 TcpServerFactory::~TcpServerFactory() {
-    // TODO(Janitha): Free the workers
+
+    debug_print("dtor\n");
+
+    ev_io_stop(loop, &accept_watcher);
 }
 
 void TcpServerFactory::start_listening() {
@@ -219,6 +230,10 @@ TcpClientFactory::TcpClientFactory(struct ev_loop *loop,
 
 }
 
+TcpClientFactory::~TcpClientFactory() {
+
+}
+
 void TcpClientFactory::factory_cb() {
 
     debug_print("called\n");
@@ -244,8 +259,4 @@ void TcpClientFactory::create_connection() {
     // New worker
     TcpClientWorker::maker(*this, *params.worker);
 
-}
-
-TcpClientFactory::~TcpClientFactory() {
-    // TODO(Janitha): Free the workers
 }

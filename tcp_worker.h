@@ -4,11 +4,14 @@
 #include "common.h"
 
 #include "tcp_factory.h"
+#include "payload.h"
+
+class Payload;
+class PayloadList;
 
 class TcpFactory;
 class TcpServerFactory;
 class TcpClientFactory;
-
 
 ////////////////////////////////////////////////////////////////////////////////
 // Base class for TcpWorkers
@@ -49,7 +52,7 @@ public:
 
     // Misc abstractions
     void read_echo();
-    void write_random(uint32_t &len, bool shutdown);
+    void write_payloads(PayloadList &payloads, size_t sendlen, size_t &sentlen, bool shutdown);
 };
 
 
@@ -117,30 +120,32 @@ public:
 
 
 ////////////////////////////////////////////////////////////////////////////////
-// Tcp random server
+// Tcp raw server
 ////////////////////////////////////////////////////////////////////////////////
-class TcpServerRandom : public TcpServerWorker {
+class TcpServerRaw : public TcpServerWorker {
 private:
-    TcpServerRandomParams &params;
-    uint32_t bytes_remaining;
+    TcpServerRawParams &params;
+
+    PayloadList payloads;
 public:
-    TcpServerRandom(TcpServerFactory &factory, TcpServerRandomParams &params, int sock);
-    virtual ~TcpServerRandom();
+    TcpServerRaw(TcpServerFactory &factory, TcpServerRawParams &params, int sock);
+    virtual ~TcpServerRaw();
 
     virtual void write_cb();
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////
-// Tcp random client
+// Tcp raw client
 ////////////////////////////////////////////////////////////////////////////////
-class TcpClientRandom : public TcpClientWorker {
+class TcpClientRaw : public TcpClientWorker {
 private:
-    TcpClientRandomParams &params;
-    uint32_t bytes_remaining;
+    TcpClientRawParams &params;
+
+    PayloadList payloads;
 public:
-    TcpClientRandom(TcpClientFactory &factory, TcpClientRandomParams &params);
-    virtual ~TcpClientRandom();
+    TcpClientRaw(TcpClientFactory &factory, TcpClientRawParams &params);
+    virtual ~TcpClientRaw();
 
     virtual void write_cb();
 };

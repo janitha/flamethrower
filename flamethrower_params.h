@@ -13,6 +13,41 @@ struct Params {
     Params(boost::property_tree::ptree &ptree);
 };
 
+
+////////////////////////////////////////////////////////////////////////////////
+struct PayloadParams {
+
+    enum class PayloadType {
+        RANDOM,
+        FILE
+    } type;
+
+    PayloadParams(boost::property_tree::ptree &ptree);
+
+    static PayloadParams* maker(boost::property_tree::ptree &ptree);
+
+};
+
+struct PayloadRandomParams : PayloadParams {
+
+    static const size_t RANDOM_BUF_SIZE = 1024*1024;
+    char random_buf[RANDOM_BUF_SIZE];
+
+    size_t payload_len;
+
+    PayloadRandomParams(boost::property_tree::ptree &ptree);
+
+};
+
+struct PayloadFileParams : PayloadParams {
+
+    char *payload_ptr;
+    size_t payload_len;
+
+    PayloadFileParams(boost::property_tree::ptree &ptree);
+
+};
+
 ////////////////////////////////////////////////////////////////////////////////
 struct TcpWorkerParams : public Params {
     int linger; // tcp linger as set via SO_LINGER
@@ -25,7 +60,7 @@ struct TcpServerWorkerParams : public TcpWorkerParams {
     enum class WorkerType {
         NONE,
         ECHO,
-        RANDOM,
+        RAW,
         HTTP
     } type;
 
@@ -44,7 +79,7 @@ struct TcpClientWorkerParams : public TcpWorkerParams {
     enum class WorkerType {
         NONE,
         ECHO,
-        RANDOM,
+        RAW,
         HTTP
     } type;
 
@@ -60,16 +95,20 @@ struct TcpClientEchoParams : public TcpClientWorkerParams {
     TcpClientEchoParams(boost::property_tree::ptree &ptree);
 };
 
-struct TcpServerRandomParams : public TcpServerWorkerParams {
-    uint32_t bytes;
+struct TcpServerRawParams : public TcpServerWorkerParams {
+
+    std::list<PayloadParams*> payloads;
     bool shutdown;
-    TcpServerRandomParams(boost::property_tree::ptree &ptree);
+
+    TcpServerRawParams(boost::property_tree::ptree &ptree);
 };
 
-struct TcpClientRandomParams : public TcpClientWorkerParams {
-    uint32_t bytes;
+struct TcpClientRawParams : public TcpClientWorkerParams {
+
+    std::list<PayloadParams*> payloads;
     bool shutdown;
-    TcpClientRandomParams(boost::property_tree::ptree &ptree);
+
+    TcpClientRawParams(boost::property_tree::ptree &ptree);
 };
 
 struct TcpServerHttpParams : public TcpServerWorkerParams {

@@ -6,7 +6,7 @@ TcpWorker::TcpWorker(TcpFactory &factory, TcpWorkerParams &params, int sock)
       params(params),
       sock(sock) {
 
-    debug_print("ctor\n");
+    debug_socket_print(sock, "ctor\n");
 
     factory.worker_new_cb(*this);
 }
@@ -14,7 +14,7 @@ TcpWorker::TcpWorker(TcpFactory &factory, TcpWorkerParams &params, int sock)
 
 TcpWorker::~TcpWorker() {
 
-    debug_print("dtor\n");
+    debug_socket_print(sock, "dtor\n");
 
     ev_io_stop(factory.loop, &sock_r_ev);
     ev_io_stop(factory.loop, &sock_w_ev);
@@ -105,7 +105,7 @@ void TcpWorker::read_cb() {
         return;
     }
 
-    debug_print("read bytes=%lu\n", recvlen);
+    debug_socket_print(sock, "read bytes=%lu\n", recvlen);
 
 }
 
@@ -128,7 +128,7 @@ void TcpWorker::write_cb() {
 
 void TcpWorker::read_echo() {
 
-    debug_print("called\n");
+    debug_socket_print(sock, "called\n");
 
     char buf[RECVBUF_SIZE];
     memset(buf, 0, sizeof(buf));
@@ -147,7 +147,7 @@ void TcpWorker::read_echo() {
         return;
     }
 
-    debug_print("echo: %s", buf);
+    debug_socket_print(sock, "echo: %s", buf);
 
     size_t sentlen;
     switch(send_buf(buf, recvlen, sentlen)) {
@@ -163,21 +163,27 @@ void TcpWorker::read_echo() {
     }
 }
 
-void TcpWorker::write_random(uint32_t &len, bool shutdown) {
+void TcpWorker::write_payloads(PayloadList &payloads, size_t sendlen, size_t &sentlen, bool shutdown) {
 
-    debug_print("called len=%du\n", len);
+    sendlen = (sendlen < SENDBUF_SIZE) ? sendlen : SENDBUF_SIZE;
 
-    char buf[SENDBUF_SIZE];
-    memset(buf, 0, sizeof(buf));
+    char *payload_ptr;
+    size_t payload_len = 0;
 
-    uint32_t sz = (len >= sizeof(buf)) ? sizeof(buf) : len;
-    for(uint32_t i=0; i<sz; i++) {
-        // Random printable ascii
-        buf[i] = '!' + (std::rand()%93);
+    payload_ptr = payloads.peek(sendlen, payload_len);
+
+    if(!payload_ptr) {
+        if(shutdown) {
+            delete this;
+        } else {
+            ev_io_stop(factory.loop, &sock_w_ev);
+        }
+        return;
     }
 
-    size_t sentlen;
-    switch(send_buf(buf, len >= sizeof(buf) ? sizeof(buf) : len, sentlen)) {
+    // TODO(Janitha): Handle payload_len = 0, this is work to be done in payloads
+
+    switch(send_buf(payload_ptr, payload_len, sentlen)) {
     case sock_act::CONTINUE:
         break;
     case sock_act::ERROR:
@@ -189,16 +195,15 @@ void TcpWorker::write_random(uint32_t &len, bool shutdown) {
         return;
     }
 
-    debug_print("random: %lu bytes\n", sentlen);
-    len -= sentlen;
+    debug_socket_print(sock, "raw wrote: %lu bytes\n", sentlen);
 
-    if(!len) {
+    if(!payloads.advance(sentlen)) {
         if(shutdown) {
             delete this;
-            return;
         } else {
             ev_io_stop(factory.loop, &sock_w_ev);
         }
+        return;
     }
 }
 
@@ -207,7 +212,7 @@ TcpServerWorker::TcpServerWorker(TcpServerFactory &factory, TcpServerWorkerParam
     : TcpWorker(factory, params, sock),
       params(params) {
 
-    debug_print("ctor\n");
+    debug_socket_print(sock, "ctor\n");
 
     // Set linger behavior
     {
@@ -233,7 +238,7 @@ TcpServerWorker::TcpServerWorker(TcpServerFactory &factory, TcpServerWorkerParam
 }
 
 TcpServerWorker::~TcpServerWorker() {
-    debug_print("dtor\n");
+    debug_socket_print(sock, "dtor\n");
 }
 
 
@@ -243,8 +248,8 @@ TcpServerWorker* TcpServerWorker::maker(TcpServerFactory &factory, TcpServerWork
     case TcpServerWorkerParams::WorkerType::ECHO:
         return new TcpServerEcho(factory, (TcpServerEchoParams&)params, sock);
         break;
-    case TcpServerWorkerParams::WorkerType::RANDOM:
-        return new TcpServerRandom(factory, (TcpServerRandomParams&)params, sock);
+    case TcpServerWorkerParams::WorkerType::RAW:
+        return new TcpServerRaw(factory, (TcpServerRawParams&)params, sock);
         break;
     case TcpServerWorkerParams::WorkerType::HTTP:
         return new TcpServerHttp(factory, (TcpServerHttpParams&)params, sock);
@@ -333,7 +338,7 @@ TcpClientWorker::TcpClientWorker(TcpClientFactory &factory, TcpClientWorkerParam
 
 
 TcpClientWorker::~TcpClientWorker() {
-    debug_print("dtor\n");
+    debug_socket_print(sock, "dtor\n");
     ev_timer_stop(factory.loop, &sock_timeout);
 }
 
@@ -343,8 +348,8 @@ TcpClientWorker* TcpClientWorker::maker(TcpClientFactory &factory, TcpClientWork
     case TcpClientWorkerParams::WorkerType::ECHO:
         return new TcpClientEcho(factory, (TcpClientEchoParams&)params);
         break;
-    case TcpClientWorkerParams::WorkerType::RANDOM:
-        return new TcpClientRandom(factory, (TcpClientRandomParams&)params);
+    case TcpClientWorkerParams::WorkerType::RAW:
+        return new TcpClientRaw(factory, (TcpClientRawParams&)params);
         break;
     case TcpClientWorkerParams::WorkerType::HTTP:
         return new TcpClientHttp(factory, (TcpClientHttpParams&)params);
@@ -399,7 +404,6 @@ void TcpClientWorker::connected_cb() {
 }
 
 void TcpClientWorker::timeout_cb(struct ev_loop *loop, struct ev_timer *watcher, int revents) {
-    debug_print("timeout_cb\n");
     if(revents & EV_ERROR) {
         perror("invalid event");
         return;
@@ -419,15 +423,16 @@ void TcpClientWorker::timeout_cb() {
 TcpServerEcho::TcpServerEcho(TcpServerFactory &factory, TcpServerEchoParams &params, int sock)
     : TcpServerWorker(factory, params, sock),
       params(params) {
-    debug_print("ctor\n");
+    debug_socket_print(sock, "ctor\n");
 }
 
 TcpServerEcho::~TcpServerEcho() {
-    debug_print("dtor\n");
+    debug_socket_print(sock, "dtor\n");
 }
 
 void TcpServerEcho::read_cb() {
-    debug_print("called\n");
+    debug_socket_print(sock, "called\n");
+
     return TcpWorker::read_echo();
 }
 
@@ -439,46 +444,54 @@ TcpClientEcho::TcpClientEcho(TcpClientFactory &factory, TcpClientEchoParams &par
 }
 
 TcpClientEcho::~TcpClientEcho() {
-    debug_print("dtor\n");
+    debug_socket_print(sock, "dtor\n");
 }
 
 void TcpClientEcho::read_cb() {
-    debug_print("called\n");
+    debug_socket_print(sock, "called\n");
+
     return TcpWorker::read_echo();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-TcpServerRandom::TcpServerRandom(TcpServerFactory &factory, TcpServerRandomParams &params, int sock)
+TcpServerRaw::TcpServerRaw(TcpServerFactory &factory, TcpServerRawParams &params, int sock)
     : TcpServerWorker(factory, params, sock),
       params(params),
-      bytes_remaining(params.bytes) {
-    debug_print("ctor\n");
+      payloads(*this, params.payloads) {
+    debug_socket_print(sock, "ctor\n");
 }
 
-TcpServerRandom::~TcpServerRandom() {
-    debug_print("dtor\n");
+TcpServerRaw::~TcpServerRaw() {
+    debug_socket_print(sock, "dtor\n");
+
+
 }
 
-void TcpServerRandom::write_cb() {
-    debug_print("called\n");
-    return TcpWorker::write_random(bytes_remaining, params.shutdown);
+void TcpServerRaw::write_cb() {
+    debug_socket_print(sock, "called\n");
+
+    size_t sentlen;
+    return write_payloads(payloads, SENDBUF_SIZE, sentlen, params.shutdown);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-TcpClientRandom::TcpClientRandom(TcpClientFactory &factory, TcpClientRandomParams &params)
+TcpClientRaw::TcpClientRaw(TcpClientFactory &factory, TcpClientRawParams &params)
     : TcpClientWorker(factory, params),
       params(params),
-      bytes_remaining(params.bytes) {
+      payloads(*this, params.payloads) {
     debug_print("ctor\n");
+
 }
 
-TcpClientRandom::~TcpClientRandom() {
-    debug_print("dtor\n");
+TcpClientRaw::~TcpClientRaw() {
+    debug_socket_print(sock, "dtor\n");
 }
 
-void TcpClientRandom::write_cb() {
-    debug_print("called\n");
-    TcpWorker::write_random(bytes_remaining, params.shutdown);
+void TcpClientRaw::write_cb() {
+    debug_socket_print(sock, "called\n");
+
+    size_t sentlen;
+    return write_payloads(payloads, SENDBUF_SIZE, sentlen, params.shutdown);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -486,7 +499,7 @@ TcpServerHttp::TcpServerHttp(TcpServerFactory &factory, TcpServerHttpParams &par
     : TcpServerWorker(factory, params, sock),
       params(params),
       state(ServerState::REQUEST_FIRSTLINE) {
-    debug_print("ctor\n");
+    debug_socket_print(sock, "ctor\n");
 
     res_header_ptr = params.header_payload_ptr;
     res_header_remaining = params.header_payload_len;
@@ -496,11 +509,11 @@ TcpServerHttp::TcpServerHttp(TcpServerFactory &factory, TcpServerHttpParams &par
 }
 
 TcpServerHttp::~TcpServerHttp() {
-    debug_print("dtor\n");
+    debug_socket_print(sock, "dtor\n");
 }
 
 void TcpServerHttp::read_cb() {
-    debug_print("called\n");
+    debug_socket_print(sock, "called\n");
 
     static const char CRLFCRLF[] = { 0x0d, 0x0a, 0x0d, 0x0a, 0x0 };
     static const char CRLF[] = { 0x0d, 0x0a, 0x0 };
@@ -540,13 +553,13 @@ void TcpServerHttp::read_cb() {
         return;
     }
 
-    debug_print("read %lu bytes\n", recvlen);
+    debug_socket_print(sock, "read %lu bytes\n", recvlen);
 
     // Switch for action decision
     switch(state) {
 
     case ServerState::REQUEST_FIRSTLINE:
-        debug_print("state=request_firstline\n");
+        debug_socket_print(sock, "state=request_firstline\n");
 
         // TODO(Janitha): For lazy/pragmetic/perf reasons, lets just "assume"
         //                that the termination isn't cross bufs
@@ -572,7 +585,7 @@ void TcpServerHttp::read_cb() {
         // Fallthrough
 
     case ServerState::REQUEST_HEADER:
-        debug_print("state=request_header\n");
+        debug_socket_print(sock, "state=request_header\n");
 
         // TODO(Janitha): For lazy/pragmetic/perf reasons, lets just "assume"
         //                that the header termination "0D0A0D0A" isn't cross bufs
@@ -594,7 +607,7 @@ void TcpServerHttp::read_cb() {
         // Fallthrough
 
     case ServerState::REQUEST_BODY:
-        debug_print("state=request_body\n");
+        debug_socket_print(sock, "state=request_body\n");
 
         // TODO(Janitha): Implement handling request body, RFC 2616 4.4
 
@@ -602,7 +615,7 @@ void TcpServerHttp::read_cb() {
         // Fallthrough
 
     case ServerState::REQUEST_DONE:
-        debug_print("state=request_done\n");
+        debug_socket_print(sock, "state=request_done\n");
 
         ev_io_start(factory.loop, &sock_w_ev);
 
@@ -610,7 +623,7 @@ void TcpServerHttp::read_cb() {
         // Fallthrough
 
     default:
-        debug_print("state=default\n");
+        debug_socket_print(sock, "state=default\n");
 
         break;
     }
@@ -620,7 +633,7 @@ void TcpServerHttp::read_cb() {
 }
 
 void TcpServerHttp::write_cb() {
-    debug_print("called\n");
+    debug_socket_print(sock, "called\n");
 
     size_t sendlen = 0;
     size_t sentlen = 0;
@@ -628,7 +641,7 @@ void TcpServerHttp::write_cb() {
     // Switch for action decision
     switch(state) {
     case ServerState::RESPONSE_HEADER:
-        debug_print("state=response_header\n");
+        debug_socket_print(sock, "state=response_header\n");
 
         sendlen = (SENDBUF_SIZE < res_header_remaining) ? SENDBUF_SIZE : res_header_remaining;
 
@@ -656,7 +669,7 @@ void TcpServerHttp::write_cb() {
         // Fallthrough
 
     case ServerState::RESPONSE_BODY:
-        debug_print("state=response_body\n");
+        debug_socket_print(sock, "state=response_body\n");
 
         sendlen = (SENDBUF_SIZE < res_body_remaining) ? SENDBUF_SIZE : res_body_remaining;
 
@@ -684,7 +697,7 @@ void TcpServerHttp::write_cb() {
         // Fallthrough
 
     case ServerState::RESPONSE_DONE:
-        debug_print("state=response_done\n");
+        debug_socket_print(sock, "state=response_done\n");
 
         // TODO(Janitha): We may want to do a half close here
         delete this;
@@ -705,7 +718,7 @@ TcpClientHttp::TcpClientHttp(TcpClientFactory &factory, TcpClientHttpParams &par
 }
 
 TcpClientHttp::~TcpClientHttp() {
-    debug_print("dtor\n");
+    debug_socket_print(sock, "dtor\n");
 }
 
 void TcpClientHttp::read_cb() {

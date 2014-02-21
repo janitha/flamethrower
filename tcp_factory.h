@@ -11,7 +11,7 @@ class TcpWorker;
 ////////////////////////////////////////////////////////////////////////////////
 // Base class for Factories
 ////////////////////////////////////////////////////////////////////////////////
- 
+
 // TODO(Janitha): base factory class
 class Factory {
 public:
@@ -19,7 +19,7 @@ public:
     FactoryParams &params;
 
     Factory(struct ev_loop *loop, FactoryParams &params);
-    virtual ~Factory();    
+    virtual ~Factory();
 
     static Factory* maker(struct ev_loop *loop, FactoryParams &params);
 };
