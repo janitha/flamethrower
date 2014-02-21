@@ -15,8 +15,31 @@
             "worker" : {
                 "type" : "http",
 
-                "header_payload" : "sample/response.header",
-                "body_payload" : "sample/response.body",
+                "firstline_payloads" : [{
+                    "type" : "string",
+                    "string" : "HTTP/1.1 200 OK"
+                }, {
+                    "type" : "string",
+                    "string" : "\r\n"
+                }],
+
+                "header_payloads" : [{
+                    "type" : "http_headers",
+                    "fields" : {
+                        "Content-Type" : "text/plain",
+                        "Doge" : "SuchMystery",
+                        "Herp" : "Derp",
+                        "Server" : "Flamethrower"
+                    }
+                }],
+
+                "body_payloads" : [{
+                    "type" : "string",
+                    "string" : "\r\n"
+                }, {
+                    "type" : "file",
+                    "filename" : "sample/response.body"
+                }],
 
                 "linger" : 0
             }

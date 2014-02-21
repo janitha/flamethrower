@@ -74,12 +74,21 @@ TcpWorker::sock_act TcpWorker::send_buf(char *buf, size_t buflen, size_t &sentle
     return sock_act::CONTINUE;
 }
 
+void TcpWorker::tcp_cork(bool state) {
+    int val = state;
+    if(setsockopt(sock, SOL_TCP, TCP_CORK, &val, sizeof(val)) < 0) {
+        perror("setsockopt error");
+        exit(EXIT_FAILURE);
+    }
+}
+
 void TcpWorker::read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
     if(revents & EV_ERROR) {
         perror("invalid event");
         return;
     }
     TcpWorker *worker = (TcpWorker*)watcher->data;
+
     worker->read_cb();
 }
 
@@ -115,6 +124,7 @@ void TcpWorker::write_cb(struct ev_loop *loop, struct ev_io *watcher, int revent
         return;
     }
     TcpWorker *worker = (TcpWorker*)watcher->data;
+
     worker->write_cb();
 }
 
@@ -195,7 +205,7 @@ TcpWorker::sock_act TcpWorker::write_payloads(PayloadList &payloads, size_t send
         break;
     }
 
-    debug_socket_print(sock, "raw wrote: %lu bytes\n", sentlen);
+    debug_socket_print(sock, "payload wrote: %lu bytes\n", sentlen);
 
     if(!payloads.advance(sentlen)) {
         return sock_act::CLOSE;
@@ -550,14 +560,11 @@ void TcpClientRaw::write_cb() {
 TcpServerHttp::TcpServerHttp(TcpServerFactory &factory, TcpServerHttpParams &params, int sock)
     : TcpServerWorker(factory, params, sock),
       params(params),
+      firstline_payloads(*this, params.firstline_payloads),
+      header_payloads(*this, params.header_payloads),
+      body_payloads(*this, params.body_payloads),
       state(ServerState::REQUEST_FIRSTLINE) {
     debug_socket_print(sock, "ctor\n");
-
-    res_header_ptr = params.header_payload_ptr;
-    res_header_remaining = params.header_payload_len;
-
-    res_body_ptr = params.body_payload_ptr;
-    res_body_remaining = params.body_payload_len;
 }
 
 TcpServerHttp::~TcpServerHttp() {
@@ -671,7 +678,7 @@ void TcpServerHttp::read_cb() {
 
         ev_io_start(factory.loop, &sock_w_ev);
 
-        state = ServerState::RESPONSE_HEADER;
+        state = ServerState::RESPONSE_FIRSTLINE;
         // Fallthrough
 
     default:
@@ -687,78 +694,80 @@ void TcpServerHttp::read_cb() {
 void TcpServerHttp::write_cb() {
     debug_socket_print(sock, "called\n");
 
-    size_t sendlen = 0;
+    size_t sendlen = SENDBUF_SIZE;
     size_t sentlen = 0;
+    sock_act ret;
 
-    // Switch for action decision
-    switch(state) {
-    case ServerState::RESPONSE_HEADER:
-        debug_socket_print(sock, "state=response_header\n");
+    while(sendlen) {
 
-        sendlen = (SENDBUF_SIZE < res_header_remaining) ? SENDBUF_SIZE : res_header_remaining;
+        // Switch for action decision
+        switch(state) {
+        case ServerState::RESPONSE_FIRSTLINE:
+            debug_socket_print(sock, "state=response_firstline\n");
 
-        // Switch for socket send
-        switch(send_buf((char*)res_header_ptr, sendlen, sentlen)) {
-        case sock_act::CONTINUE:
+            ret = write_payloads(firstline_payloads, sendlen, sentlen);
+            if(ret == sock_act::CLOSE) {
+                state = ServerState::RESPONSE_FIRSTLINE_END;
+            }
+            sendlen -= sentlen;
             break;
-        case sock_act::ERROR:
-            debug_socket_print(sock, "send error\n");
-            // Fallthrough
-        case sock_act::CLOSE:
-            // Fallthrough
+
+        case ServerState::RESPONSE_FIRSTLINE_END:
+            debug_socket_print(sock, "state=response_firstline_end\n");
+
+            // TODO(Janitha): Emit CRLF (workaround in config file payload)
+
+            state = ServerState::RESPONSE_HEADER;
+
+        case ServerState::RESPONSE_HEADER:
+            debug_socket_print(sock, "state=response_header\n");
+
+            ret = write_payloads(header_payloads, sendlen, sentlen);
+            if(ret == sock_act::CLOSE) {
+                state = ServerState::RESPONSE_HEADER_END;
+            }
+            sendlen -= sentlen;
+            break;
+
+        case ServerState::RESPONSE_HEADER_END:
+            debug_socket_print(sock, "state=response_header_end\n");
+
+            // TODO(Janitha): Emit CRLF (workaround in config file payload)
+
+            state = ServerState::RESPONSE_BODY;
+
+        case ServerState::RESPONSE_BODY:
+            debug_socket_print(sock, "state=response_body\n");
+
+            ret = write_payloads(body_payloads, sendlen, sentlen);
+            if(ret == sock_act::CLOSE) {
+                state = ServerState::RESPONSE_DONE;
+            }
+            sendlen -= sentlen;
+            break;
+
+        case ServerState::RESPONSE_DONE:
+            debug_socket_print(sock, "state=response_done\n");
+
+            // TODO(Janitha): We may want to do a half close here
+            delete this;
+            return;
+
+        default:
+            ev_io_stop(factory.loop, &sock_w_ev);
+            return;
+        }
+
+        if(ret == sock_act::ERROR) {
+            perror("error writeing payload");
             delete this;
             return;
         }
 
-        res_header_ptr += sentlen;
-        res_header_remaining -= sentlen;
+        sendlen -= sentlen;
 
-        if(res_header_remaining) {
-            break;
-        }
-
-        state = ServerState::RESPONSE_BODY;
-        // Fallthrough
-
-    case ServerState::RESPONSE_BODY:
-        debug_socket_print(sock, "state=response_body\n");
-
-        sendlen = (SENDBUF_SIZE < res_body_remaining) ? SENDBUF_SIZE : res_body_remaining;
-
-        // Switch for socket send
-        switch(send_buf((char*)res_body_ptr, sendlen, sentlen)) {
-        case sock_act::CONTINUE:
-            break;
-        case sock_act::ERROR:
-            debug_socket_print(sock, "send error\n");
-            // Fallthrough
-        case sock_act::CLOSE:
-            // Fallthrough
-            delete this;
-            return;
-        }
-
-        res_body_ptr += sentlen;
-        res_body_remaining -= sentlen;
-
-        if(res_body_remaining) {
-            break;
-        }
-
-        state = ServerState::RESPONSE_DONE;
-        // Fallthrough
-
-    case ServerState::RESPONSE_DONE:
-        debug_socket_print(sock, "state=response_done\n");
-
-        // TODO(Janitha): We may want to do a half close here
-        delete this;
-        return;
-
-    default:
-        ev_io_stop(factory.loop, &sock_w_ev);
-        return;
     }
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////

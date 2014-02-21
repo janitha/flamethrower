@@ -201,30 +201,6 @@ TcpServerHttpParams::TcpServerHttpParams(boost::property_tree::ptree &ptree)
         body_payloads.push_back(PayloadParams::maker(body_payload_pair.second));
     }
 
-    /*
-    std::ifstream header_file(ptree.get<std::string>("header_payload"), std::ios::in | std::ios::binary);
-    if(!header_file) {
-        perror("error: invalid http response header file");
-        exit(EXIT_FAILURE);
-    }
-    header_file.seekg(0, header_file.end);
-    header_payload_len = header_file.tellg();
-    header_file.seekg(0, header_file.beg);
-    header_payload_ptr = new char[header_payload_len];
-    header_file.read(header_payload_ptr, header_payload_len);
-
-    std::ifstream body_file(ptree.get<std::string>("body_payload"), std::ios::in | std::ios::binary);
-    if(!body_file) {
-        perror("error: invalid http response body file");
-        exit(EXIT_FAILURE);
-    }
-    body_file.seekg(0, body_file.end);
-    body_payload_len = body_file.tellg();
-    body_file.seekg(0, body_file.beg);
-    body_payload_ptr = new char[body_payload_len];
-    body_file.read(body_payload_ptr, body_payload_len);
-    */
-
 }
 
 TcpClientHttpParams::TcpClientHttpParams(boost::property_tree::ptree &ptree)

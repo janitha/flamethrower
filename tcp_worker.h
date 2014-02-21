@@ -41,8 +41,9 @@ public:
     virtual ~TcpWorker();
 
     // Socket abstractions
-    virtual sock_act recv_buf(char *buf, size_t buflen, size_t &recvlen);
-    virtual sock_act send_buf(char *buf, size_t buflen, size_t &sentlen);
+    sock_act recv_buf(char *buf, size_t buflen, size_t &recvlen);
+    sock_act send_buf(char *buf, size_t buflen, size_t &sentlen);
+    void tcp_cork(bool state);
 
     // Event callbacks
     static void read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
@@ -158,11 +159,9 @@ class TcpServerHttp : public TcpServerWorker {
 private:
     TcpServerHttpParams &params;
 
-    const char* res_header_ptr;
-    uint32_t res_header_remaining;
-
-    const char* res_body_ptr;
-    uint32_t res_body_remaining;
+    PayloadList firstline_payloads;
+    PayloadList header_payloads;
+    PayloadList body_payloads;
 
     enum class ServerState {
         REQUEST_FIRSTLINE,
@@ -170,7 +169,9 @@ private:
         REQUEST_BODY,
         REQUEST_DONE,
         RESPONSE_FIRSTLINE,
+        RESPONSE_FIRSTLINE_END,
         RESPONSE_HEADER,
+        RESPONSE_HEADER_END,
         RESPONSE_BODY,
         RESPONSE_DONE
     } state;
