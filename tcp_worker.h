@@ -51,8 +51,8 @@ public:
     virtual void write_cb();
 
     // Misc abstractions
-    void read_echo();
-    void write_payloads(PayloadList &payloads, size_t sendlen, size_t &sentlen, bool shutdown);
+    sock_act read_echo();
+    sock_act write_payloads(PayloadList &payloads, size_t sendlen, size_t &sentlen);
 };
 
 

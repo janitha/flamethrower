@@ -126,7 +126,7 @@ void TcpWorker::write_cb() {
 
 }
 
-void TcpWorker::read_echo() {
+TcpWorker::sock_act TcpWorker::read_echo() {
 
     debug_socket_print(sock, "called\n");
 
@@ -134,7 +134,8 @@ void TcpWorker::read_echo() {
     memset(buf, 0, sizeof(buf));
     size_t recvlen;
 
-    switch(recv_buf(buf, sizeof(buf), recvlen)) {
+    sock_act recv_ret = recv_buf(buf, sizeof(buf), recvlen);
+    switch(recv_ret) {
     case sock_act::CONTINUE:
         break;
     case sock_act::ERROR:
@@ -143,14 +144,14 @@ void TcpWorker::read_echo() {
     case sock_act::CLOSE:
         // Fallthrough
     default:
-        delete this; // YOLO!
-        return;
+        return recv_ret;
     }
 
     debug_socket_print(sock, "echo: %s", buf);
 
     size_t sentlen;
-    switch(send_buf(buf, recvlen, sentlen)) {
+    sock_act send_ret = send_buf(buf, recvlen, sentlen);
+    switch(send_ret) {
     case sock_act::CONTINUE:
         break;
     case sock_act::ERROR:
@@ -158,12 +159,14 @@ void TcpWorker::read_echo() {
         // Fallthrough
     case sock_act::CLOSE:
         // Fallthrough
-        delete this;
-        return;
+    default:
+        return send_ret;
     }
+
+    return sock_act::CONTINUE;
 }
 
-void TcpWorker::write_payloads(PayloadList &payloads, size_t sendlen, size_t &sentlen, bool shutdown) {
+TcpWorker::sock_act TcpWorker::write_payloads(PayloadList &payloads, size_t sendlen, size_t &sentlen) {
 
     sendlen = (sendlen < SENDBUF_SIZE) ? sendlen : SENDBUF_SIZE;
 
@@ -173,17 +176,13 @@ void TcpWorker::write_payloads(PayloadList &payloads, size_t sendlen, size_t &se
     payload_ptr = payloads.peek(sendlen, payload_len);
 
     if(!payload_ptr) {
-        if(shutdown) {
-            delete this;
-        } else {
-            ev_io_stop(factory.loop, &sock_w_ev);
-        }
-        return;
+        return sock_act::CLOSE;
     }
 
     // TODO(Janitha): Handle payload_len = 0, this is work to be done in payloads
 
-    switch(send_buf(payload_ptr, payload_len, sentlen)) {
+    sock_act send_ret = send_buf(payload_ptr, payload_len, sentlen);
+    switch(send_ret) {
     case sock_act::CONTINUE:
         break;
     case sock_act::ERROR:
@@ -191,20 +190,18 @@ void TcpWorker::write_payloads(PayloadList &payloads, size_t sendlen, size_t &se
         // Fallthrough
     case sock_act::CLOSE:
         // Fallthrough
-        delete this;
-        return;
+    default:
+        return send_ret;
+        break;
     }
 
     debug_socket_print(sock, "raw wrote: %lu bytes\n", sentlen);
 
     if(!payloads.advance(sentlen)) {
-        if(shutdown) {
-            delete this;
-        } else {
-            ev_io_stop(factory.loop, &sock_w_ev);
-        }
-        return;
+        return sock_act::CLOSE;
     }
+
+    return sock_act::CONTINUE;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -433,7 +430,18 @@ TcpServerEcho::~TcpServerEcho() {
 void TcpServerEcho::read_cb() {
     debug_socket_print(sock, "called\n");
 
-    return TcpWorker::read_echo();
+    switch(TcpWorker::read_echo()) {
+    case sock_act::CONTINUE:
+        break;
+    case sock_act::ERROR:
+        debug_socket_print(sock, "read echo error\n");
+        // Fallthrough
+    case sock_act::CLOSE:
+        // Fallthrough
+    default:
+        delete this;
+        return;
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -450,7 +458,18 @@ TcpClientEcho::~TcpClientEcho() {
 void TcpClientEcho::read_cb() {
     debug_socket_print(sock, "called\n");
 
-    return TcpWorker::read_echo();
+    switch(TcpWorker::read_echo()) {
+    case sock_act::CONTINUE:
+        break;
+    case sock_act::ERROR:
+        debug_socket_print(sock, "read echo error\n");
+        // Fallthrough
+    case sock_act::CLOSE:
+        // Fallthrough
+    default:
+        delete this;
+        return;
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -471,7 +490,24 @@ void TcpServerRaw::write_cb() {
     debug_socket_print(sock, "called\n");
 
     size_t sentlen;
-    return write_payloads(payloads, SENDBUF_SIZE, sentlen, params.shutdown);
+    switch(write_payloads(payloads, SENDBUF_SIZE, sentlen)) {
+    case sock_act::CONTINUE:
+        break;
+    case sock_act::CLOSE:
+        if(params.shutdown) {
+            delete this;
+        } else {
+            ev_io_stop(factory.loop, &sock_w_ev);
+        }
+        break;
+    case sock_act::ERROR:
+    default:
+        debug_socket_print(sock, "write payload error\n");
+        delete this;
+        return;
+        break;
+    }
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -491,7 +527,23 @@ void TcpClientRaw::write_cb() {
     debug_socket_print(sock, "called\n");
 
     size_t sentlen;
-    return write_payloads(payloads, SENDBUF_SIZE, sentlen, params.shutdown);
+    switch(write_payloads(payloads, SENDBUF_SIZE, sentlen)) {
+    case sock_act::CONTINUE:
+        break;
+    case sock_act::CLOSE:
+        if(params.shutdown) {
+            delete this;
+        } else {
+            ev_io_stop(factory.loop, &sock_w_ev);
+        }
+        break;
+    case sock_act::ERROR:
+    default:
+        debug_socket_print(sock, "write payload error\n");
+        delete this;
+        return;
+        break;
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////

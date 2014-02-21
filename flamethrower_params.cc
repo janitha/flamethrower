@@ -189,6 +189,19 @@ TcpServerHttpParams::TcpServerHttpParams(boost::property_tree::ptree &ptree)
 
     type = WorkerType::HTTP;
 
+    for(auto &firstline_payload_pair : ptree.get_child("firstline_payloads")) {
+        firstline_payloads.push_back(PayloadParams::maker(firstline_payload_pair.second));
+    }
+
+    for(auto &header_payload_pair : ptree.get_child("header_payloads")) {
+        header_payloads.push_back(PayloadParams::maker(header_payload_pair.second));
+    }
+
+    for(auto &body_payload_pair : ptree.get_child("body_payloads")) {
+        body_payloads.push_back(PayloadParams::maker(body_payload_pair.second));
+    }
+
+    /*
     std::ifstream header_file(ptree.get<std::string>("header_payload"), std::ios::in | std::ios::binary);
     if(!header_file) {
         perror("error: invalid http response header file");
@@ -210,6 +223,7 @@ TcpServerHttpParams::TcpServerHttpParams(boost::property_tree::ptree &ptree)
     body_file.seekg(0, body_file.beg);
     body_payload_ptr = new char[body_payload_len];
     body_file.read(body_payload_ptr, body_payload_len);
+    */
 
 }
 

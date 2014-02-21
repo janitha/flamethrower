@@ -137,6 +137,11 @@ struct TcpClientRawParams : public TcpClientWorkerParams {
 
 ////////////////////////////////////////////////////////////////////////////////
 struct TcpServerHttpParams : public TcpServerWorkerParams {
+
+    std::list<PayloadParams*> firstline_payloads;
+    std::list<PayloadParams*> header_payloads;
+    std::list<PayloadParams*> body_payloads;
+
     TcpServerHttpParams(boost::property_tree::ptree &ptree);
 };
 
