@@ -17,7 +17,8 @@ Params::Params(boost::property_tree::ptree &ptree) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-PayloadParams::PayloadParams(boost::property_tree::ptree &ptree) {
+PayloadParams::PayloadParams(boost::property_tree::ptree &ptree)
+    : Params(ptree) {
 
 }
 
@@ -28,6 +29,10 @@ PayloadParams* PayloadParams::maker(boost::property_tree::ptree &ptree) {
         return new PayloadRandomParams(ptree);
     } else if(payload_type == "file") {
         return new PayloadFileParams(ptree);
+    } else if(payload_type == "string") {
+        return new PayloadStringParams(ptree);
+    } else if(payload_type == "http_headers") {
+        return new PayloadHttpHeadersParams(ptree);
     } else {
         printf("error: invalid payload type\n");
         exit(EXIT_FAILURE);
@@ -49,8 +54,23 @@ PayloadRandomParams::PayloadRandomParams(boost::property_tree::ptree &ptree)
 
 }
 
-PayloadFileParams::PayloadFileParams(boost::property_tree::ptree &ptree)
+PayloadBufAbstractParams::PayloadBufAbstractParams(boost::property_tree::ptree &ptree)
     : PayloadParams(ptree) {
+}
+
+PayloadStringParams::PayloadStringParams(boost::property_tree::ptree &ptree)
+    : PayloadBufAbstractParams(ptree) {
+
+    type = PayloadType::STRING;
+
+    std::string str = ptree.get<std::string>("string");
+    payload_len = str.size();
+    payload_ptr = new char[str.size()];
+    memcpy(payload_ptr, str.c_str(), str.size());
+}
+
+PayloadFileParams::PayloadFileParams(boost::property_tree::ptree &ptree)
+    : PayloadBufAbstractParams(ptree) {
 
     type = PayloadType::FILE;
 
@@ -64,7 +84,12 @@ PayloadFileParams::PayloadFileParams(boost::property_tree::ptree &ptree)
     payload_file.seekg(0, payload_file.beg);
     payload_ptr = new char[payload_len]; // TODO(Janitha): Cleanup in dtor
     payload_file.read(payload_ptr, payload_len);
+}
 
+PayloadHttpHeadersParams::PayloadHttpHeadersParams(boost::property_tree::ptree &ptree)
+    : PayloadBufAbstractParams(ptree) {
+
+    type = PayloadType::HTTP_HEADERS;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -150,20 +175,6 @@ TcpServerHttpParams::TcpServerHttpParams(boost::property_tree::ptree &ptree)
     : TcpServerWorkerParams(ptree) {
 
     type = WorkerType::HTTP;
-
-    static const char default_header[] =
-        "HTTP/1.1 200 OK\r\n"
-        "Server: Firehose\r\n"
-        "Content-Type: text/plain\r\n"
-        "\r\n";
-    static const char default_body[] =
-        "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod "
-        "tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim "
-        "veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea "
-        "commodo consequat. Duis aute irure dolor in reprehenderit in voluptate "
-        "velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat "
-        "cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id "
-        "est laborum.";
 
     std::ifstream header_file(ptree.get<std::string>("header_payload"), std::ios::in | std::ios::binary);
     if(!header_file) {

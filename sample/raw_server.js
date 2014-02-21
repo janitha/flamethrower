@@ -27,6 +27,14 @@
                     {
                         "type" : "random",
                         "length" : 10
+                    },
+                    {
+                        "type" : "string",
+                        "string" : "Janitha Karunaratne"
+                    },
+                    {
+                        "type" : "string",
+                        "string" : "Janitha Karunaratne"
                     }
                 ],
 

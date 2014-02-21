@@ -54,18 +54,51 @@ public:
 };
 
 ////////////////////////////////////////////////////////////////////////////////
-// File based payload
+// Pre allocated buffer based abstract class
 ////////////////////////////////////////////////////////////////////////////////
-class PayloadFile : public Payload {
+class PayloadBufAbstract : public Payload {
 public:
-    PayloadFileParams &params;
+    PayloadBufAbstractParams &params;
 
     char *payload_ptr;
     size_t remaining;
 
-    PayloadFile(TcpWorker &worker, PayloadFileParams &params);
-    virtual ~PayloadFile();
+    PayloadBufAbstract(TcpWorker &worker, PayloadBufAbstractParams &params);
+    virtual ~PayloadBufAbstract();
 
     virtual char* peek(size_t maxlen, size_t &len);
     virtual size_t advance(size_t len);
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// String based payload
+////////////////////////////////////////////////////////////////////////////////
+class PayloadString : public PayloadBufAbstract {
+public:
+    PayloadStringParams &params;
+
+    PayloadString(TcpWorker &worker, PayloadStringParams &params);
+    virtual ~PayloadString();
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// File based payload
+////////////////////////////////////////////////////////////////////////////////
+class PayloadFile : public PayloadBufAbstract {
+public:
+    PayloadFileParams &params;
+
+    PayloadFile(TcpWorker &worker, PayloadFileParams &params);
+    virtual ~PayloadFile();
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// HttpHeaders based payload
+////////////////////////////////////////////////////////////////////////////////
+class PayloadHttpHeaders : public PayloadBufAbstract {
+public:
+    PayloadHttpHeadersParams &params;
+
+    PayloadHttpHeaders(TcpWorker &worker, PayloadHttpHeadersParams &params);
+    virtual ~PayloadHttpHeaders();
 };

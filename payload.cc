@@ -84,6 +84,12 @@ Payload* Payload::maker(TcpWorker &worker, PayloadParams &params) {
     case PayloadParams::PayloadType::FILE:
         return new PayloadFile(worker, (PayloadFileParams&)params);
         break;
+    case PayloadParams::PayloadType::STRING:
+        return new PayloadString(worker, (PayloadStringParams&)params);
+        break;
+    case PayloadParams::PayloadType::HTTP_HEADERS:
+        return new PayloadHttpHeaders(worker, (PayloadHttpHeadersParams&)params);
+        break;
     default:
         perror("error: invalid payload type\n");
         exit(EXIT_FAILURE);
@@ -139,7 +145,7 @@ size_t PayloadRandom::advance(size_t len) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-PayloadFile::PayloadFile(TcpWorker &worker, PayloadFileParams &params)
+PayloadBufAbstract::PayloadBufAbstract(TcpWorker &worker, PayloadBufAbstractParams &params)
     : Payload(worker, params),
       params(params) {
 
@@ -147,10 +153,10 @@ PayloadFile::PayloadFile(TcpWorker &worker, PayloadFileParams &params)
     payload_ptr = params.payload_ptr;
 }
 
-PayloadFile::~PayloadFile() {
+PayloadBufAbstract::~PayloadBufAbstract() {
 }
 
-char* PayloadFile::peek(size_t maxlen, size_t &len) {
+char* PayloadBufAbstract::peek(size_t maxlen, size_t &len) {
 
     if(!remaining) {
         return nullptr;
@@ -160,7 +166,7 @@ char* PayloadFile::peek(size_t maxlen, size_t &len) {
     return payload_ptr;
 }
 
-size_t PayloadFile::advance(size_t len) {
+size_t PayloadBufAbstract::advance(size_t len) {
 
     if(len > remaining) {
         perror("error: attempt to advance the payload too much");
@@ -171,4 +177,30 @@ size_t PayloadFile::advance(size_t len) {
     payload_ptr += len;
 
     return remaining;
+}
+////////////////////////////////////////////////////////////////////////////////
+PayloadString::PayloadString(TcpWorker &worker, PayloadStringParams &params)
+    : PayloadBufAbstract(worker, params),
+      params(params) {
+}
+
+PayloadString::~PayloadString() {
+}
+
+////////////////////////////////////////////////////////////////////////////////
+PayloadFile::PayloadFile(TcpWorker &worker, PayloadFileParams &params)
+    : PayloadBufAbstract(worker, params),
+      params(params) {
+}
+
+PayloadFile::~PayloadFile() {
+}
+
+////////////////////////////////////////////////////////////////////////////////
+PayloadHttpHeaders::PayloadHttpHeaders(TcpWorker &worker, PayloadHttpHeadersParams &params)
+    : PayloadBufAbstract(worker, params),
+      params(params) {
+}
+
+PayloadHttpHeaders::~PayloadHttpHeaders() {
 }
