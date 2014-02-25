@@ -1,3 +1,6 @@
+#ifndef COMMON_H
+#define COMMON_H
+
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -49,3 +52,6 @@
                 inet_ntoa(sa_to.sin_addr),   ntohs(sa_to.sin_port),     \
                 ##__VA_ARGS__);                                         \
     }} while (0)
+
+
+#endif
