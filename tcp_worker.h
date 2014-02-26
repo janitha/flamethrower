@@ -5,6 +5,7 @@
 
 #include "tcp_factory.h"
 #include "payload.h"
+#include "memhunter.h"
 
 class Payload;
 class PayloadList;
@@ -159,22 +160,24 @@ class TcpServerHttp : public TcpServerWorker {
 private:
     TcpServerHttpParams &params;
 
-    PayloadList firstline_payloads;
-    PayloadList header_payloads;
-    PayloadList body_payloads;
-
     enum class ServerState {
-        REQUEST_FIRSTLINE,
-        REQUEST_HEADER,
-        REQUEST_BODY,
-        REQUEST_DONE,
+        START,
+        REQUEST,
+        RESPONSE_START,
         RESPONSE_FIRSTLINE,
         RESPONSE_FIRSTLINE_END,
         RESPONSE_HEADER,
         RESPONSE_HEADER_END,
         RESPONSE_BODY,
-        RESPONSE_DONE
+        RESPONSE_DONE,
+        DONE
     } state;
+
+    PayloadList firstline_payloads;
+    PayloadList header_payloads;
+    PayloadList body_payloads;
+
+    MemHunter request_crlfcrlf_mh;
 
 public:
     TcpServerHttp(TcpServerFactory &factory, TcpServerHttpParams &params, int sock);
@@ -204,6 +207,9 @@ public:
         RESPONSE_DONE
     } state;
 
+    PayloadList firstline_payloads;
+    PayloadList header_payloads;
+    PayloadList body_payloads;
 
     TcpClientHttp(TcpClientFactory &factory, TcpClientHttpParams &params);
     virtual ~TcpClientHttp();

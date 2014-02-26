@@ -242,6 +242,7 @@ TcpServerWorker::TcpServerWorker(TcpServerFactory &factory, TcpServerWorkerParam
     sock_w_ev.data = this;
     ev_io_init(&sock_w_ev, write_cb, sock, EV_WRITE);
     ev_io_start(factory.loop, &sock_w_ev);
+
 }
 
 TcpServerWorker::~TcpServerWorker() {
@@ -401,10 +402,12 @@ void TcpClientWorker::connected_cb() {
 
     debug_socket_print(sock, "connection established\n");
 
+    // Hookup socket readable event
     sock_r_ev.data = this;
     ev_io_init(&sock_r_ev, read_cb, sock, EV_READ);
     ev_io_start(factory.loop, &sock_r_ev);
 
+    // Hookup socket writable event
     sock_w_ev.data = this;
     ev_io_init(&sock_w_ev, write_cb, sock, EV_WRITE);
     ev_io_start(factory.loop, &sock_w_ev);
@@ -492,8 +495,6 @@ TcpServerRaw::TcpServerRaw(TcpServerFactory &factory, TcpServerRawParams &params
 
 TcpServerRaw::~TcpServerRaw() {
     debug_socket_print(sock, "dtor\n");
-
-
 }
 
 void TcpServerRaw::write_cb() {
@@ -560,11 +561,14 @@ void TcpClientRaw::write_cb() {
 TcpServerHttp::TcpServerHttp(TcpServerFactory &factory, TcpServerHttpParams &params, int sock)
     : TcpServerWorker(factory, params, sock),
       params(params),
+      state(ServerState::START),
       firstline_payloads(*this, params.firstline_payloads),
       header_payloads(*this, params.header_payloads),
       body_payloads(*this, params.body_payloads),
-      state(ServerState::REQUEST_FIRSTLINE) {
+      request_crlfcrlf_mh("\r\n\r\n", 4) {
+
     debug_socket_print(sock, "ctor\n");
+
 }
 
 TcpServerHttp::~TcpServerHttp() {
@@ -574,37 +578,22 @@ TcpServerHttp::~TcpServerHttp() {
 void TcpServerHttp::read_cb() {
     debug_socket_print(sock, "called\n");
 
-    static const char CRLFCRLF[] = { 0x0d, 0x0a, 0x0d, 0x0a, 0x0 };
-    static const char CRLF[] = { 0x0d, 0x0a, 0x0 };
-
     char recvbuf_array[RECVBUF_SIZE];
     char *recvbuf = recvbuf_array;
     memset(recvbuf, 0, sizeof(recvbuf));
     size_t recvlen;
 
-    // Switch for reading decision
-    switch(state) {
-    case ServerState::REQUEST_FIRSTLINE:
-    case ServerState::REQUEST_HEADER:
-    case ServerState::REQUEST_BODY:
-
-        // Switch for socket recv
-        switch(recv_buf(recvbuf_array, sizeof(recvbuf_array), recvlen)) {
-        case SockAct::CONTINUE:
-            break;
-        case SockAct::ERROR:
-            debug_socket_print(sock, "recv error\n");
-            // Fallthrough
-        case SockAct::CLOSE:
-            // Fallthrough
-        default:
-            delete this;
-            return;
-        }
-
+    // Switch for socket recv
+    switch(recv_buf(recvbuf_array, sizeof(recvbuf_array), recvlen)) {
+    case SockAct::CONTINUE:
         break;
-
+    case SockAct::ERROR:
+        debug_socket_print(sock, "recv error\n");
+        // Fallthrough
+    case SockAct::CLOSE:
+        // Fallthrough
     default:
+        delete this;
         return;
     }
 
@@ -614,8 +603,36 @@ void TcpServerHttp::read_cb() {
 
     debug_socket_print(sock, "read %lu bytes\n", recvlen);
 
+    char *request_end;
+
+    // Switch for reading decision
+    switch(state) {
+    case ServerState::START:
+        state = ServerState::REQUEST;
+
+    case ServerState::REQUEST:
+        debug_socket_print(sock, "reading_request\n");
+
+        request_end = request_crlfcrlf_mh.findend(recvbuf, recvlen);
+        if(!request_end) break;
+
+        ev_io_start(factory.loop, &sock_w_ev);
+        state = ServerState::RESPONSE_START;
+
+    default:
+
+        // TODO(Janitha): Letting the sock_r_ev to continue to eat
+        // Whatever additional data is being sent, eg. req body
+        //ev_io_stop(factory.loop, &sock_r_ev);
+
+        return;
+    }
+
+    /*
+
     // Switch for action decision
     switch(state) {
+    case ServerState::READING_REQUEST:
 
     case ServerState::REQUEST_FIRSTLINE:
         debug_socket_print(sock, "state=request_firstline\n");
@@ -624,7 +641,7 @@ void TcpServerHttp::read_cb() {
         //                that the termination isn't cross bufs
 
         char *firstline_end;
-        if((firstline_end = std::strstr(recvbuf, CRLF)) == nullptr) {
+        if((firstline_end = (char*)memmem(recvbuf, recvlen, CRLF, sizeof(CRLF))) == nullptr) {
             // first line end not found
             break;
         }
@@ -650,7 +667,7 @@ void TcpServerHttp::read_cb() {
         //                that the header termination "0D0A0D0A" isn't cross bufs
 
         char *header_end;
-        if((header_end = std::strstr(recvbuf, CRLFCRLF)) == nullptr) {
+        if((header_end = (char*)memmem(recvbuf, recvlen, CRLFCRLF, sizeof(CRLFCRLF))) == nullptr) {
             // Header teminator not found
             break;
         }
@@ -689,10 +706,32 @@ void TcpServerHttp::read_cb() {
 
     return;
 
+    */
+
 }
 
 void TcpServerHttp::write_cb() {
     debug_socket_print(sock, "called\n");
+
+    /*
+    size_t sentlen;
+    SockAct ret;
+
+    // Switch for write decision
+    switch(state) {
+    case ServerState::WRITING_RESPONSE:
+        debug_socket_print(sock, "writing_response\n");
+
+        ret = write_payloads(payloads, SENDBUF_SIZE, sentlen);
+        if(ret == SockAct::CONTINUE) break;
+
+        state = ServerState::DONE;
+
+    default:
+        ev_io_stop(factory.loop, &sock_w_ev);
+        return;
+    }
+    */
 
     size_t sendlen = SENDBUF_SIZE;
     size_t sentlen = 0;
@@ -702,6 +741,9 @@ void TcpServerHttp::write_cb() {
 
         // Switch for action decision
         switch(state) {
+        case ServerState::RESPONSE_START:
+            state = ServerState::RESPONSE_FIRSTLINE;
+
         case ServerState::RESPONSE_FIRSTLINE:
             debug_socket_print(sock, "state=response_firstline\n");
 
@@ -749,6 +791,10 @@ void TcpServerHttp::write_cb() {
         case ServerState::RESPONSE_DONE:
             debug_socket_print(sock, "state=response_done\n");
 
+            state = ServerState::DONE;
+
+        case ServerState::DONE:
+
             // TODO(Janitha): We may want to do a half close here
             delete this;
             return;
@@ -759,25 +805,28 @@ void TcpServerHttp::write_cb() {
         }
 
         if(ret == SockAct::ERROR) {
-            perror("error writeing payload");
+            perror("error writing payload");
             delete this;
             return;
         }
 
         sendlen -= sentlen;
-
     }
-
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 TcpClientHttp::TcpClientHttp(TcpClientFactory &factory, TcpClientHttpParams &params)
     : TcpClientWorker(factory, params),
       params(params),
-      state(ClientState::REQUEST_FIRSTLINE) {
+      state(ClientState::REQUEST_FIRSTLINE),
+      firstline_payloads(*this, params.firstline_payloads),
+      header_payloads(*this, params.header_payloads),
+      body_payloads(*this, params.body_payloads) {
+
     debug_print("ctor\n");
 
-
+    debug_print("HTTP CLIENT IS BROKEN, WORK IN PROGRESS\n");
+    exit(EXIT_FAILURE);
 
 }
 
@@ -786,9 +835,11 @@ TcpClientHttp::~TcpClientHttp() {
 }
 
 void TcpClientHttp::read_cb() {
+    debug_socket_print(sock, "called\n");
 
 }
 
 void TcpClientHttp::write_cb() {
+    debug_socket_print(sock, "called\n");
 
 }

@@ -206,6 +206,19 @@ TcpServerHttpParams::TcpServerHttpParams(boost::property_tree::ptree &ptree)
 TcpClientHttpParams::TcpClientHttpParams(boost::property_tree::ptree &ptree)
     : TcpClientWorkerParams(ptree) {
     type = WorkerType::HTTP;
+
+    for(auto &firstline_payload_pair : ptree.get_child("firstline_payloads")) {
+        firstline_payloads.push_back(PayloadParams::maker(firstline_payload_pair.second));
+    }
+
+    for(auto &header_payload_pair : ptree.get_child("header_payloads")) {
+        header_payloads.push_back(PayloadParams::maker(header_payload_pair.second));
+    }
+
+    for(auto &body_payload_pair : ptree.get_child("body_payloads")) {
+        body_payloads.push_back(PayloadParams::maker(body_payload_pair.second));
+    }
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////

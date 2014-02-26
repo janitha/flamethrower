@@ -39,14 +39,12 @@ public:
         // Find it in lookback
         found = (char*)memmem(lookback, lookbacklen+cpylen, needle, needlelen);
         if(found) {
-            printf("found in lookback\n");
             return haystack + (found - lookback) - lookbacklen + needlelen;
         }
 
         // Find it in the haystack
         found = (char*)memmem(haystack, haylen, needle, needlelen);
         if(found) {
-            printf("found in haystack\n");
             return found + needlelen;
         }
 

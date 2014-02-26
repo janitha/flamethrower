@@ -94,7 +94,7 @@ void TcpFactory::stats_cb() {
     printf("bytes_in=%lu "
            "bytes_out=%lu "
            "count=%lu "
-           "workers=%zu\n",
+           "workers=%lu\n",
            bytes_in,
            bytes_out,
            cumulative_count,

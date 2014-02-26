@@ -83,12 +83,6 @@ struct TcpServerWorkerParams : public TcpWorkerParams {
         HTTP
     } type;
 
-    char *header_payload_ptr;
-    size_t header_payload_len;
-
-    char *body_payload_ptr;
-    size_t body_payload_len;
-
     TcpServerWorkerParams(boost::property_tree::ptree &ptree);
     static TcpServerWorkerParams* maker(boost::property_tree::ptree &ptree);
 };
