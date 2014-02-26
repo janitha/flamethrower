@@ -737,6 +737,8 @@ void TcpServerHttp::write_cb() {
     size_t sentlen = 0;
     SockAct ret;
 
+    tcp_cork(true);
+
     while(sendlen) {
 
         // Switch for action decision
@@ -795,6 +797,8 @@ void TcpServerHttp::write_cb() {
 
         case ServerState::DONE:
 
+            tcp_cork(false);
+
             // TODO(Janitha): We may want to do a half close here
             delete this;
             return;
@@ -812,6 +816,8 @@ void TcpServerHttp::write_cb() {
 
         sendlen -= sentlen;
     }
+
+    tcp_cork(false);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
