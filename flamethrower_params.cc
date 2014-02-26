@@ -96,7 +96,7 @@ PayloadHttpHeadersParams::PayloadHttpHeadersParams(boost::property_tree::ptree &
     for(auto &header_pair : ptree.get_child("fields")) {
 
         header_ss << std::string(header_pair.first.data())
-                  << " : "
+                  << ": "
                   << std::string(header_pair.second.data())
                   << "\r\n";
     }
