@@ -11,8 +11,8 @@
             "server_port" : 9999,
             "connect_timeout" : 10,
 
-            "concurrency" : 50,
-            "count" : 10000000,
+            "concurrency" : 2,
+            "count" : 10,
 
             "worker" : {
                 "type" : "raw",
@@ -20,7 +20,7 @@
                 "payloads" : [
                     {
                         "type" : "random",
-                        "length" : 1000
+                        "length" : 10
                     },
                     {
                         "type" : "file",
@@ -32,9 +32,10 @@
                     }
                 ],
 
-                "shutdown" : true,
+                "initiate_close" : false,
+                "delay_close" : 0,
 
-                "linger" : 0
+                "tcp_linger" : 0
             }
         }
     ]

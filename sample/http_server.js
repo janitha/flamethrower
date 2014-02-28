@@ -39,9 +39,16 @@
                 }, {
                     "type" : "file",
                     "filename" : "sample/response.body"
+                }, {
+                    "type" : "random",
+                    "length" : 10000 
                 }],
 
-                "linger" : 0
+                "initiate_close" : true,
+                "delay_close" : 5,
+
+                "tcp_linger" : 0
+
             }
         }
     ]

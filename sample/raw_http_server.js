@@ -37,9 +37,10 @@
 
                 ],
 
-                "shutdown" : true,
+                "initiate_close" : true,
+                "delay_close" : 4,
 
-                "linger" : 0
+                "tcp_linger" : 0
             }
         }
     ]
