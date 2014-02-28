@@ -104,6 +104,8 @@ void TcpWorker::close_wait_cb() {
         return;
     }
 
+    debug_socket_print(sock, "read bytes=%lu\n", recvlen);
+
 }
 
 TcpWorker::SockAct TcpWorker::recv_buf(char *buf, size_t buflen, size_t &recvlen) {
