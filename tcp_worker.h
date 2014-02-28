@@ -30,6 +30,8 @@ public:
     struct ev_io sock_r_ev;
     struct ev_io sock_w_ev;
 
+    struct ev_timer close_timer_ev;
+
     std::list<TcpWorker*>::iterator workers_list_pos;
 
     enum class SockAct {
@@ -52,6 +54,14 @@ public:
     static void write_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
     virtual void write_cb();
 
+    static void close_cb(struct ev_loop *loop, struct ev_timer *watcher, int revents);
+    virtual void close_cb();     // TODO(Janitha): Also have a shutdown equiavalant of this
+    static void close_wait_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
+    virtual void close_wait_cb();
+
+    // Worker actions
+    virtual void finish();
+
     // Misc abstractions
     SockAct read_echo();
     SockAct write_payloads(PayloadList &payloads, size_t sendlen, size_t &sentlen);
@@ -69,6 +79,8 @@ public:
     virtual ~TcpServerWorker();
 
     static TcpServerWorker* maker(TcpServerFactory &factory, TcpServerWorkerParams &params, int sock);
+
+    virtual void finish();
 };
 
 
@@ -90,6 +102,8 @@ public:
 
     static void timeout_cb(struct ev_loop *loop, struct ev_timer *watcher, int revents);
     virtual void timeout_cb();
+
+    virtual void finish();
 };
 
 
@@ -104,6 +118,8 @@ public:
     virtual ~TcpServerEcho();
 
     virtual void read_cb();
+
+    virtual void finish();
 };
 
 
@@ -118,6 +134,8 @@ public:
     virtual ~TcpClientEcho();
 
     virtual void read_cb();
+
+    virtual void finish();
 };
 
 
@@ -134,6 +152,8 @@ public:
     virtual ~TcpServerRaw();
 
     virtual void write_cb();
+
+    virtual void finish();
 };
 
 
@@ -150,6 +170,8 @@ public:
     virtual ~TcpClientRaw();
 
     virtual void write_cb();
+
+    virtual void finish();
 };
 
 
@@ -185,6 +207,8 @@ public:
 
     virtual void read_cb();
     virtual void write_cb();
+
+    virtual void finish();
 };
 
 
@@ -217,6 +241,7 @@ public:
     virtual void read_cb();
     virtual void write_cb();
 
+    virtual void finish();
 };
 
 #endif

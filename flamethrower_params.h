@@ -68,7 +68,10 @@ struct PayloadHttpHeadersParams : PayloadBufAbstractParams {
 ////////////////////////////////////////////////////////////////////////////////
 struct TcpWorkerParams : public Params {
 
-    int linger; // tcp linger as set via SO_LINGER
+    bool initiate_close;
+    float delay_close;
+
+    int tcp_linger; // tcp linger as set via SO_LINGER
 
     TcpWorkerParams(boost::property_tree::ptree &ptree);
 };
@@ -115,7 +118,6 @@ struct TcpClientEchoParams : public TcpClientWorkerParams {
 struct TcpServerRawParams : public TcpServerWorkerParams {
 
     std::list<PayloadParams*> payloads;
-    bool shutdown;
 
     TcpServerRawParams(boost::property_tree::ptree &ptree);
 };
@@ -124,7 +126,6 @@ struct TcpServerRawParams : public TcpServerWorkerParams {
 struct TcpClientRawParams : public TcpClientWorkerParams {
 
     std::list<PayloadParams*> payloads;
-    bool shutdown;
 
     TcpClientRawParams(boost::property_tree::ptree &ptree);
 };

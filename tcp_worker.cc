@@ -8,6 +8,9 @@ TcpWorker::TcpWorker(TcpFactory &factory, TcpWorkerParams &params, int sock)
 
     debug_socket_print(sock, "ctor\n");
 
+    close_timer_ev.data = this;
+    ev_timer_init(&close_timer_ev, close_cb, params.delay_close, 0);
+
     factory.worker_new_cb(*this);
 }
 
@@ -18,12 +21,89 @@ TcpWorker::~TcpWorker() {
 
     ev_io_stop(factory.loop, &sock_r_ev);
     ev_io_stop(factory.loop, &sock_w_ev);
+    ev_timer_stop(factory.loop, &close_timer_ev);
 
     if(close(sock) == -1) {
         perror("socket close error");
     }
 
     factory.worker_delete_cb(*this);
+}
+
+void TcpWorker::finish() {
+
+    // TODO(Janitha): This also needs to start a read handler
+    //                to check if the otherside kills the conn
+
+    ev_io_stop(factory.loop, &sock_r_ev);
+    ev_io_stop(factory.loop, &sock_w_ev);
+
+    if(params.initiate_close) {
+
+        if(params.delay_close > 0) {
+            debug_socket_print(sock, "delaying close %fs\n", params.delay_close);
+            ev_timer_start(factory.loop, &close_timer_ev);
+        } else {
+            return close_cb();
+            // TODO(Janitha): Or should we also schedule this to a timerout of 0
+        }
+
+    } else {
+
+        debug_socket_print(sock, "wait for other side to close\n");
+        sock_r_ev.data = this;
+        ev_io_init(&sock_r_ev, close_wait_cb, sock, EV_READ);
+        ev_io_start(factory.loop, &sock_r_ev);
+
+    }
+}
+
+void TcpWorker::close_cb(struct ev_loop *loop, struct ev_timer *watcher, int revents) {
+    if(revents & EV_ERROR) {
+        perror("invalid event");
+        return;
+    }
+    TcpWorker *worker = (TcpWorker*)watcher->data;
+    worker->close_cb();
+}
+
+void TcpWorker::close_cb() {
+    debug_socket_print(sock, "called\n");
+    delete this;     // I too like to live dangerously
+    return;
+}
+
+void TcpWorker::close_wait_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
+    if(revents & EV_ERROR) {
+        perror("invalid event");
+        return;
+    }
+    TcpWorker *worker = (TcpWorker*)watcher->data;
+    worker->close_wait_cb();
+}
+
+void TcpWorker::close_wait_cb() {
+    debug_socket_print(sock, "called\n");
+
+    // Just recv until the other side kills the connection
+
+    char buf[RECVBUF_SIZE];
+    size_t recvlen;
+
+    SockAct recv_ret = recv_buf(buf, sizeof(buf), recvlen);
+    switch(recv_ret) {
+    case SockAct::CONTINUE:
+        break;
+    case SockAct::ERROR:
+        debug_socket_print(sock, "recv error\n");
+        // Fallthrough
+    case SockAct::CLOSE:
+        // Fallthrough
+    default:
+        delete this;
+        return;
+    }
+
 }
 
 TcpWorker::SockAct TcpWorker::recv_buf(char *buf, size_t buflen, size_t &recvlen) {
@@ -104,10 +184,10 @@ void TcpWorker::read_cb() {
     switch(recv_buf(recvbuf, sizeof(recvbuf), recvlen)) {
     case SockAct::CONTINUE:
         break;
+    case SockAct::CLOSE:
+        return finish();
     case SockAct::ERROR:
         debug_socket_print(sock, "recv error\n");
-        // Fallthrough
-    case SockAct::CLOSE:
         // Fallthrough
     default:
         delete this; // YOLO!
@@ -225,8 +305,8 @@ TcpServerWorker::TcpServerWorker(TcpServerFactory &factory, TcpServerWorkerParam
     {
         struct linger lingerval;
         memset(&lingerval, 0, sizeof(lingerval));
-        lingerval.l_onoff = params.linger ? 1 : 0;
-        lingerval.l_linger = params.linger;
+        lingerval.l_onoff = params.tcp_linger ? 1 : 0;
+        lingerval.l_linger = params.tcp_linger;
         if(setsockopt(sock, SOL_SOCKET, SO_LINGER, &lingerval, sizeof(lingerval)) < 0) {
             perror("setsockopt error");
             exit(EXIT_FAILURE);
@@ -249,6 +329,9 @@ TcpServerWorker::~TcpServerWorker() {
     debug_socket_print(sock, "dtor\n");
 }
 
+void TcpServerWorker::finish() {
+    return TcpWorker::finish();
+}
 
 TcpServerWorker* TcpServerWorker::maker(TcpServerFactory &factory, TcpServerWorkerParams &params, int sock) {
 
@@ -287,8 +370,8 @@ TcpClientWorker::TcpClientWorker(TcpClientFactory &factory, TcpClientWorkerParam
     {
         struct linger lingerval;
         memset(&lingerval, 0, sizeof(lingerval));
-        lingerval.l_onoff = params.linger ? 1 : 0;
-        lingerval.l_linger = params.linger;
+        lingerval.l_onoff = params.tcp_linger ? 1 : 0;
+        lingerval.l_linger = params.tcp_linger;
         if(setsockopt(sock, SOL_SOCKET, SO_LINGER, &lingerval, sizeof(lingerval)) < 0) {
             perror("setsockopt error");
             exit(EXIT_FAILURE);
@@ -350,6 +433,11 @@ TcpClientWorker::~TcpClientWorker() {
     ev_timer_stop(factory.loop, &sock_timeout);
 }
 
+void TcpClientWorker::finish() {
+    ev_timer_stop(factory.loop, &sock_timeout);
+    return TcpWorker::finish();
+}
+
 TcpClientWorker* TcpClientWorker::maker(TcpClientFactory &factory, TcpClientWorkerParams &params) {
 
     switch(params.type) {
@@ -396,7 +484,7 @@ void TcpClientWorker::connected_cb() {
 
     if(error) {
         fprintf(stderr, "connect error: %s\n", strerror(error));
-        delete this; // I too like to live dangerously
+        delete this;
         return;
     }
 
@@ -440,16 +528,20 @@ TcpServerEcho::~TcpServerEcho() {
     debug_socket_print(sock, "dtor\n");
 }
 
+void TcpServerEcho::finish() {
+    return TcpServerWorker::finish();
+}
+
 void TcpServerEcho::read_cb() {
     debug_socket_print(sock, "called\n");
 
     switch(TcpWorker::read_echo()) {
     case SockAct::CONTINUE:
         break;
+    case SockAct::CLOSE:
+        return finish();
     case SockAct::ERROR:
         debug_socket_print(sock, "read echo error\n");
-        // Fallthrough
-    case SockAct::CLOSE:
         // Fallthrough
     default:
         delete this;
@@ -468,16 +560,20 @@ TcpClientEcho::~TcpClientEcho() {
     debug_socket_print(sock, "dtor\n");
 }
 
+void TcpClientEcho::finish() {
+    return TcpClientWorker::finish();
+}
+
 void TcpClientEcho::read_cb() {
     debug_socket_print(sock, "called\n");
 
     switch(TcpWorker::read_echo()) {
     case SockAct::CONTINUE:
         break;
+    case SockAct::CLOSE:
+        return finish();
     case SockAct::ERROR:
         debug_socket_print(sock, "read echo error\n");
-        // Fallthrough
-    case SockAct::CLOSE:
         // Fallthrough
     default:
         delete this;
@@ -497,6 +593,10 @@ TcpServerRaw::~TcpServerRaw() {
     debug_socket_print(sock, "dtor\n");
 }
 
+void TcpServerRaw::finish() {
+    return TcpServerWorker::finish();
+}
+
 void TcpServerRaw::write_cb() {
     debug_socket_print(sock, "called\n");
 
@@ -505,18 +605,12 @@ void TcpServerRaw::write_cb() {
     case SockAct::CONTINUE:
         break;
     case SockAct::CLOSE:
-        if(params.shutdown) {
-            delete this;
-        } else {
-            ev_io_stop(factory.loop, &sock_w_ev);
-        }
-        break;
+        return finish();
     case SockAct::ERROR:
     default:
         debug_socket_print(sock, "write payload error\n");
         delete this;
         return;
-        break;
     }
 
 }
@@ -534,6 +628,10 @@ TcpClientRaw::~TcpClientRaw() {
     debug_socket_print(sock, "dtor\n");
 }
 
+void TcpClientRaw::finish() {
+    return TcpClientWorker::finish();
+}
+
 void TcpClientRaw::write_cb() {
     debug_socket_print(sock, "called\n");
 
@@ -542,18 +640,12 @@ void TcpClientRaw::write_cb() {
     case SockAct::CONTINUE:
         break;
     case SockAct::CLOSE:
-        if(params.shutdown) {
-            delete this;
-        } else {
-            ev_io_stop(factory.loop, &sock_w_ev);
-        }
-        break;
+        return finish();
     case SockAct::ERROR:
     default:
         debug_socket_print(sock, "write payload error\n");
         delete this;
         return;
-        break;
     }
 }
 
@@ -575,6 +667,10 @@ TcpServerHttp::~TcpServerHttp() {
     debug_socket_print(sock, "dtor\n");
 }
 
+void TcpServerHttp::finish() {
+    return TcpServerWorker::finish();
+}
+
 void TcpServerHttp::read_cb() {
     debug_socket_print(sock, "called\n");
 
@@ -587,10 +683,10 @@ void TcpServerHttp::read_cb() {
     switch(recv_buf(recvbuf_array, sizeof(recvbuf_array), recvlen)) {
     case SockAct::CONTINUE:
         break;
+    case SockAct::CLOSE:
+        return finish();
     case SockAct::ERROR:
         debug_socket_print(sock, "recv error\n");
-        // Fallthrough
-    case SockAct::CLOSE:
         // Fallthrough
     default:
         delete this;
@@ -796,12 +892,12 @@ void TcpServerHttp::write_cb() {
             state = ServerState::DONE;
 
         case ServerState::DONE:
+            debug_socket_print(sock, "state=done\n");
 
             tcp_cork(false);
 
             // TODO(Janitha): We may want to do a half close here
-            delete this;
-            return;
+            return finish();
 
         default:
             ev_io_stop(factory.loop, &sock_w_ev);
@@ -833,11 +929,14 @@ TcpClientHttp::TcpClientHttp(TcpClientFactory &factory, TcpClientHttpParams &par
 
     debug_print("HTTP CLIENT IS BROKEN, WORK IN PROGRESS\n");
     exit(EXIT_FAILURE);
-
 }
 
 TcpClientHttp::~TcpClientHttp() {
     debug_socket_print(sock, "dtor\n");
+}
+
+void TcpClientHttp::finish() {
+    return TcpClientWorker::finish();
 }
 
 void TcpClientHttp::read_cb() {

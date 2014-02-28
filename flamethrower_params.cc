@@ -109,7 +109,9 @@ PayloadHttpHeadersParams::PayloadHttpHeadersParams(boost::property_tree::ptree &
 TcpWorkerParams::TcpWorkerParams(boost::property_tree::ptree &ptree)
     : Params(ptree) {
 
-    linger = ptree.get<int>("linger");
+    tcp_linger = ptree.get<int>("tcp_linger");
+    initiate_close = ptree.get<bool>("initiate_close");
+    delay_close = ptree.get<float>("delay_close");
 }
 
 TcpServerWorkerParams* TcpServerWorkerParams::maker(boost::property_tree::ptree &ptree) {
@@ -169,7 +171,6 @@ TcpServerRawParams::TcpServerRawParams(boost::property_tree::ptree &ptree)
         payloads.push_back(PayloadParams::maker(payload_pair.second));
     }
 
-    shutdown = ptree.get<bool>("shutdown");
 }
 
 TcpClientRawParams::TcpClientRawParams(boost::property_tree::ptree &ptree)
@@ -181,7 +182,6 @@ TcpClientRawParams::TcpClientRawParams(boost::property_tree::ptree &ptree)
         payloads.push_back(PayloadParams::maker(payload_pair.second));
     }
 
-    shutdown = ptree.get<bool>("shutdown");
 }
 
 TcpServerHttpParams::TcpServerHttpParams(boost::property_tree::ptree &ptree)
