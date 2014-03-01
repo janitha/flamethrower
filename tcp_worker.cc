@@ -832,12 +832,14 @@ void TcpServerHttp::write_cb() {
     */
 
     size_t sendlen = SENDBUF_SIZE;
-    size_t sentlen = 0;
+    size_t sentlen;
     SockAct ret;
 
     tcp_cork(true);
 
     while(sendlen) {
+
+        sentlen = 0;
 
         // Switch for action decision
         switch(state) {
@@ -911,8 +913,6 @@ void TcpServerHttp::write_cb() {
             delete this;
             return;
         }
-
-        sendlen -= sentlen;
     }
 
     tcp_cork(false);

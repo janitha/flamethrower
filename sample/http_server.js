@@ -41,11 +41,11 @@
                     "filename" : "sample/response.body"
                 }, {
                     "type" : "random",
-                    "length" : 10000 
+                    "length" : 10000000 
                 }],
 
                 "initiate_close" : true,
-                "delay_close" : 5,
+                "delay_close" : 0,
 
                 "tcp_linger" : 0
 
