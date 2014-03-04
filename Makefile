@@ -2,7 +2,7 @@ CC=g++
 CFLAGS=-Wall -Wunused -Wextra -g3 -std=c++0x -pedantic
 LDFLAGS=
 LIBS=-lev
-SOURCES=main.cc flamethrower.cc flamethrower_params.cc tcp_factory.cc tcp_worker.cc payload.cc http_worker.cc
+SOURCES=main.cc flamethrower.cc params.cc tcp_factory.cc tcp_worker.cc payload.cc http_worker.cc
 OBJECTS=$(SOURCES:.cc=.o)
 EXECUTABLE=flamethrower
 

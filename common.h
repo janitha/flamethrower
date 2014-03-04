@@ -22,7 +22,7 @@
 
 #include <ev.h>
 
-#include "flamethrower_params.h"
+#include "params.h"
 
 #define DEBUG 1
 

@@ -1,5 +1,5 @@
-#ifndef FLAMETHROWER_PARAMS_H
-#define FLAMETHROWER_PARAMS_H
+#ifndef PARAMS_H
+#define PARAMS_H
 
 #include <string>
 #include <list>
