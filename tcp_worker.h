@@ -40,6 +40,10 @@ public:
         ERROR
     };
 
+    uint64_t readable_time;
+    uint64_t writable_time;
+    uint64_t close_time;
+
     TcpWorker(TcpFactory &factory, TcpWorkerParams &params, int sock=-1);
     virtual ~TcpWorker();
 
@@ -75,6 +79,9 @@ class TcpServerWorker : public TcpWorker {
 private:
     TcpServerWorkerParams &params;
 public:
+
+    uint64_t established_time;
+
     TcpServerWorker(TcpServerFactory &factory, TcpServerWorkerParams &params, int sock);
     virtual ~TcpServerWorker();
 
@@ -92,6 +99,10 @@ private:
     TcpClientWorkerParams &params;
     struct ev_timer sock_timeout;
 public:
+
+    uint64_t connect_time;
+    uint64_t established_time;
+
     TcpClientWorker(TcpClientFactory &factory, TcpClientWorkerParams &params);
     virtual ~TcpClientWorker();
 

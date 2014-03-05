@@ -4,7 +4,10 @@
 TcpWorker::TcpWorker(TcpFactory &factory, TcpWorkerParams &params, int sock)
     : factory(factory),
       params(params),
-      sock(sock) {
+      sock(sock),
+      readable_time(0),
+      writable_time(0),
+      close_time(0) {
 
     debug_socket_print(sock, "ctor\n");
 
@@ -25,6 +28,10 @@ TcpWorker::~TcpWorker() {
 
     if(close(sock) == -1) {
         perror("socket close error");
+    }
+
+    if(!close_time) {
+        close_time = timestamp_ns_now();
     }
 
     factory.worker_delete_cb(*this);
@@ -124,7 +131,10 @@ TcpWorker::SockAct TcpWorker::recv_buf(char *buf, size_t buflen, size_t &recvlen
     }
 
     recvlen = ret;
+
+    // Update factory stats
     factory.bytes_in += ret;
+
     return SockAct::CONTINUE;
 }
 
@@ -152,7 +162,10 @@ TcpWorker::SockAct TcpWorker::send_buf(char *buf, size_t buflen, size_t &sentlen
     }
 
     sentlen = ret;
+
+    // Update factory stats
     factory.bytes_out += ret;
+
     return SockAct::CONTINUE;
 }
 
@@ -169,7 +182,13 @@ void TcpWorker::read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents
         perror("invalid event");
         return;
     }
+
     TcpWorker *worker = (TcpWorker*)watcher->data;
+
+    // Timestamp
+    if(!worker->readable_time) {
+        worker->readable_time = timestamp_ns_now();
+    }
 
     worker->read_cb();
 }
@@ -205,7 +224,13 @@ void TcpWorker::write_cb(struct ev_loop *loop, struct ev_io *watcher, int revent
         perror("invalid event");
         return;
     }
+
     TcpWorker *worker = (TcpWorker*)watcher->data;
+
+    // Timestamp
+    if(!worker->writable_time) {
+        worker->writable_time = timestamp_ns_now();
+    }
 
     worker->write_cb();
 }
@@ -299,7 +324,8 @@ TcpWorker::SockAct TcpWorker::write_payloads(PayloadList &payloads, size_t sendl
 ////////////////////////////////////////////////////////////////////////////////
 TcpServerWorker::TcpServerWorker(TcpServerFactory &factory, TcpServerWorkerParams &params, int sock)
     : TcpWorker(factory, params, sock),
-      params(params) {
+      params(params),
+      established_time(0) {
 
     debug_socket_print(sock, "ctor\n");
 
@@ -325,10 +351,26 @@ TcpServerWorker::TcpServerWorker(TcpServerFactory &factory, TcpServerWorkerParam
     ev_io_init(&sock_w_ev, write_cb, sock, EV_WRITE);
     ev_io_start(factory.loop, &sock_w_ev);
 
+    // Accept timestamp
+    established_time = timestamp_ns_now();
 }
 
 TcpServerWorker::~TcpServerWorker() {
     debug_socket_print(sock, "dtor\n");
+
+    if(!close_time) {
+        close_time = timestamp_ns_now();
+    }
+
+    debug_print("latency: "
+                "readable=%luns "
+                "writable=%luns "
+                "close=%luns "
+                "\n",
+                readable_time - established_time,
+                writable_time - established_time,
+                close_time - established_time);
+
 }
 
 void TcpServerWorker::finish() {
@@ -358,7 +400,9 @@ TcpServerWorker* TcpServerWorker::maker(TcpServerFactory &factory, TcpServerWork
 ////////////////////////////////////////////////////////////////////////////////
 TcpClientWorker::TcpClientWorker(TcpClientFactory &factory, TcpClientWorkerParams &params)
     : TcpWorker(factory, params),
-      params(params) {
+      params(params),
+      connect_time(0),
+      established_time(0) {
 
     debug_print("ctor\n");
 
@@ -427,12 +471,31 @@ TcpClientWorker::TcpClientWorker(TcpClientFactory &factory, TcpClientWorkerParam
     sock_timeout.data = this;
     ev_timer_init(&sock_timeout, timeout_cb, factory.params.connect_timeout, 0);
     ev_timer_start(factory.loop, &sock_timeout);
+
+    // Connect timestamp
+    connect_time = timestamp_ns_now();
 }
 
 
 TcpClientWorker::~TcpClientWorker() {
     debug_socket_print(sock, "dtor\n");
     ev_timer_stop(factory.loop, &sock_timeout);
+
+    if(!close_time) {
+        close_time = timestamp_ns_now();
+    }
+
+    debug_print("latency: "
+                "connect=%luns "
+                "readable=%luns "
+                "writable=%luns "
+                "close=%luns "
+                "\n",
+                established_time - connect_time,
+                readable_time - established_time,
+                writable_time - established_time,
+                close_time - established_time);
+
 }
 
 void TcpClientWorker::finish() {
@@ -465,7 +528,13 @@ void TcpClientWorker::connected_cb(struct ev_loop *loop, struct ev_io *watcher, 
         perror("invalid event");
         return;
     }
+
     TcpClientWorker *worker = (TcpClientWorker*)watcher->data;
+
+    if(!worker->established_time) {
+        worker->established_time = timestamp_ns_now();
+    }
+
     worker->connected_cb();
 }
 
@@ -509,6 +578,7 @@ void TcpClientWorker::timeout_cb(struct ev_loop *loop, struct ev_timer *watcher,
         return;
     }
     TcpClientWorker *worker = (TcpClientWorker*)watcher->data;
+
     worker->timeout_cb();
 }
 

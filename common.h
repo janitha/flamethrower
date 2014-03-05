@@ -23,6 +23,7 @@
 #include <ev.h>
 
 #include "params.h"
+#include "events.h"
 
 #define DEBUG 1
 
