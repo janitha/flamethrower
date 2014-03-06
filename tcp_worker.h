@@ -24,6 +24,7 @@ public:
 
     TcpFactory &factory;
     TcpWorkerParams &params;
+    TcpWorkerStats &stats;
 
     int sock;
 
@@ -40,12 +41,14 @@ public:
         ERROR
     };
 
-    uint64_t readable_time;
-    uint64_t writable_time;
-    uint64_t close_time;
-
-    TcpWorker(TcpFactory &factory, TcpWorkerParams &params, int sock=-1);
+    TcpWorker(TcpFactory &factory,
+              TcpWorkerParams &params,
+              TcpWorkerStats &stats,
+              int sock=-1);
     virtual ~TcpWorker();
+
+    // Worker actions
+    virtual void finish();
 
     // Socket abstractions
     SockAct recv_buf(char *buf, size_t buflen, size_t &recvlen);
@@ -63,9 +66,6 @@ public:
     static void close_wait_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
     virtual void close_wait_cb();
 
-    // Worker actions
-    virtual void finish();
-
     // Misc abstractions
     SockAct read_echo();
     SockAct write_payloads(PayloadList &payloads, size_t sendlen, size_t &sentlen);
@@ -78,14 +78,18 @@ public:
 class TcpServerWorker : public TcpWorker {
 private:
     TcpServerWorkerParams &params;
+    TcpServerWorkerStats &stats;
 public:
 
-    uint64_t established_time;
-
-    TcpServerWorker(TcpServerFactory &factory, TcpServerWorkerParams &params, int sock);
+    TcpServerWorker(TcpServerFactory &factory,
+                    TcpServerWorkerParams &params,
+                    TcpServerWorkerStats &stats,
+                    int sock);
     virtual ~TcpServerWorker();
 
-    static TcpServerWorker* maker(TcpServerFactory &factory, TcpServerWorkerParams &params, int sock);
+    static TcpServerWorker* maker(TcpServerFactory &factory,
+                                  TcpServerWorkerParams &params,
+                                  int sock);
 
     virtual void finish();
 };
@@ -97,16 +101,19 @@ public:
 class TcpClientWorker : public TcpWorker {
 private:
     TcpClientWorkerParams &params;
+    TcpClientWorkerStats &stats;
+
     struct ev_timer sock_timeout;
+
 public:
 
-    uint64_t connect_time;
-    uint64_t established_time;
-
-    TcpClientWorker(TcpClientFactory &factory, TcpClientWorkerParams &params);
+    TcpClientWorker(TcpClientFactory &factory,
+                    TcpClientWorkerParams &params,
+                    TcpClientWorkerStats &stats);
     virtual ~TcpClientWorker();
 
-    static TcpClientWorker* maker(TcpClientFactory &factory, TcpClientWorkerParams &params);
+    static TcpClientWorker* maker(TcpClientFactory &factory,
+                                  TcpClientWorkerParams &params);
 
     static void connected_cb(struct ev_loop *loop, struct ev_io *watcher,int revents);
     virtual void connected_cb();
@@ -124,8 +131,12 @@ public:
 class TcpServerEcho : public TcpServerWorker {
 private:
     TcpServerEchoParams &params;
+    TcpServerEchoStats &stats;
 public:
-    TcpServerEcho(TcpServerFactory &factory, TcpServerEchoParams &params, int sock);
+    TcpServerEcho(TcpServerFactory &factory,
+                  TcpServerEchoParams &params,
+                  TcpServerEchoStats &stats,
+                  int sock);
     virtual ~TcpServerEcho();
 
     virtual void read_cb();
@@ -140,8 +151,11 @@ public:
 class TcpClientEcho : public TcpClientWorker {
 private:
     TcpClientEchoParams &params;
+    TcpClientEchoStats &stats;
 public:
-    TcpClientEcho(TcpClientFactory &factory, TcpClientEchoParams &params);
+    TcpClientEcho(TcpClientFactory &factory,
+                  TcpClientEchoParams &params,
+                  TcpClientEchoStats &stats);
     virtual ~TcpClientEcho();
 
     virtual void read_cb();
@@ -156,10 +170,14 @@ public:
 class TcpServerRaw : public TcpServerWorker {
 private:
     TcpServerRawParams &params;
+    TcpServerRawStats &stats;
 
     PayloadList payloads;
 public:
-    TcpServerRaw(TcpServerFactory &factory, TcpServerRawParams &params, int sock);
+    TcpServerRaw(TcpServerFactory &factory,
+                 TcpServerRawParams &params,
+                 TcpServerRawStats &stats,
+                 int sock);
     virtual ~TcpServerRaw();
 
     virtual void write_cb();
@@ -174,10 +192,13 @@ public:
 class TcpClientRaw : public TcpClientWorker {
 private:
     TcpClientRawParams &params;
+    TcpClientRawStats &stats;
 
     PayloadList payloads;
 public:
-    TcpClientRaw(TcpClientFactory &factory, TcpClientRawParams &params);
+    TcpClientRaw(TcpClientFactory &factory,
+                 TcpClientRawParams &params,
+                 TcpClientRawStats &stats);
     virtual ~TcpClientRaw();
 
     virtual void write_cb();
@@ -192,6 +213,7 @@ public:
 class TcpServerHttp : public TcpServerWorker {
 private:
     TcpServerHttpParams &params;
+    TcpServerHttpStats &stats;
 
     enum class ServerState {
         START,
@@ -213,7 +235,10 @@ private:
     MemHunter request_crlfcrlf_mh;
 
 public:
-    TcpServerHttp(TcpServerFactory &factory, TcpServerHttpParams &params, int sock);
+    TcpServerHttp(TcpServerFactory &factory,
+                  TcpServerHttpParams &params,
+                  TcpServerHttpStats &stats,
+                  int sock);
     virtual ~TcpServerHttp();
 
     virtual void read_cb();
@@ -229,6 +254,7 @@ public:
 class TcpClientHttp : public TcpClientWorker {
 private:
     TcpClientHttpParams &params;
+    TcpClientHttpStats &stats;
 public:
 
     enum class ClientState {
@@ -246,7 +272,9 @@ public:
     PayloadList header_payloads;
     PayloadList body_payloads;
 
-    TcpClientHttp(TcpClientFactory &factory, TcpClientHttpParams &params);
+    TcpClientHttp(TcpClientFactory &factory,
+                  TcpClientHttpParams &params,
+                  TcpClientHttpStats &stats);
     virtual ~TcpClientHttp();
 
     virtual void read_cb();

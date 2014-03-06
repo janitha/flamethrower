@@ -1,13 +1,14 @@
 #include "tcp_worker.h"
 
 ////////////////////////////////////////////////////////////////////////////////
-TcpWorker::TcpWorker(TcpFactory &factory, TcpWorkerParams &params, int sock)
+TcpWorker::TcpWorker(TcpFactory &factory,
+                     TcpWorkerParams &params,
+                     TcpWorkerStats &stats,
+                     int sock)
     : factory(factory),
       params(params),
-      sock(sock),
-      readable_time(0),
-      writable_time(0),
-      close_time(0) {
+      stats(stats),
+      sock(sock) {
 
     debug_socket_print(sock, "ctor\n");
 
@@ -30,8 +31,8 @@ TcpWorker::~TcpWorker() {
         perror("socket close error");
     }
 
-    if(!close_time) {
-        close_time = timestamp_ns_now();
+    if(!stats.close_time) {
+        stats.close_time = timestamp_ns_now();
     }
 
     factory.worker_delete_cb(*this);
@@ -132,8 +133,9 @@ TcpWorker::SockAct TcpWorker::recv_buf(char *buf, size_t buflen, size_t &recvlen
 
     recvlen = ret;
 
-    // Update factory stats
-    factory.bytes_in += ret;
+    // Update stats
+    stats.bytes_in += ret;
+    factory.stats.bytes_in += ret;
 
     return SockAct::CONTINUE;
 }
@@ -163,8 +165,9 @@ TcpWorker::SockAct TcpWorker::send_buf(char *buf, size_t buflen, size_t &sentlen
 
     sentlen = ret;
 
-    // Update factory stats
-    factory.bytes_out += ret;
+    // Update stats
+    stats.bytes_out += ret;
+    factory.stats.bytes_out += ret;
 
     return SockAct::CONTINUE;
 }
@@ -186,8 +189,8 @@ void TcpWorker::read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents
     TcpWorker *worker = (TcpWorker*)watcher->data;
 
     // Timestamp
-    if(!worker->readable_time) {
-        worker->readable_time = timestamp_ns_now();
+    if(!worker->stats.readable_time) {
+        worker->stats.readable_time = timestamp_ns_now();
     }
 
     worker->read_cb();
@@ -228,8 +231,8 @@ void TcpWorker::write_cb(struct ev_loop *loop, struct ev_io *watcher, int revent
     TcpWorker *worker = (TcpWorker*)watcher->data;
 
     // Timestamp
-    if(!worker->writable_time) {
-        worker->writable_time = timestamp_ns_now();
+    if(!worker->stats.writable_time) {
+        worker->stats.writable_time = timestamp_ns_now();
     }
 
     worker->write_cb();
@@ -322,10 +325,13 @@ TcpWorker::SockAct TcpWorker::write_payloads(PayloadList &payloads, size_t sendl
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-TcpServerWorker::TcpServerWorker(TcpServerFactory &factory, TcpServerWorkerParams &params, int sock)
-    : TcpWorker(factory, params, sock),
+TcpServerWorker::TcpServerWorker(TcpServerFactory &factory,
+                                 TcpServerWorkerParams &params,
+                                 TcpServerWorkerStats &stats,
+                                 int sock)
+    : TcpWorker(factory, params, stats, sock),
       params(params),
-      established_time(0) {
+      stats(stats) {
 
     debug_socket_print(sock, "ctor\n");
 
@@ -352,14 +358,14 @@ TcpServerWorker::TcpServerWorker(TcpServerFactory &factory, TcpServerWorkerParam
     ev_io_start(factory.loop, &sock_w_ev);
 
     // Accept timestamp
-    established_time = timestamp_ns_now();
+    stats.established_time = timestamp_ns_now();
 }
 
 TcpServerWorker::~TcpServerWorker() {
     debug_socket_print(sock, "dtor\n");
 
-    if(!close_time) {
-        close_time = timestamp_ns_now();
+    if(!stats.close_time) {
+        stats.close_time = timestamp_ns_now();
     }
 
     debug_print("latency: "
@@ -367,9 +373,9 @@ TcpServerWorker::~TcpServerWorker() {
                 "writable=%luns "
                 "close=%luns "
                 "\n",
-                readable_time - established_time,
-                writable_time - established_time,
-                close_time - established_time);
+                stats.readable_time - stats.established_time,
+                stats.writable_time - stats.established_time,
+                stats.close_time - stats.established_time);
 
 }
 
@@ -377,17 +383,28 @@ void TcpServerWorker::finish() {
     return TcpWorker::finish();
 }
 
-TcpServerWorker* TcpServerWorker::maker(TcpServerFactory &factory, TcpServerWorkerParams &params, int sock) {
+TcpServerWorker* TcpServerWorker::maker(TcpServerFactory &factory,
+                                        TcpServerWorkerParams &params,
+                                        int sock) {
 
     switch(params.type) {
     case TcpServerWorkerParams::WorkerType::ECHO:
-        return new TcpServerEcho(factory, (TcpServerEchoParams&)params, sock);
+        return new TcpServerEcho(factory,
+                                 (TcpServerEchoParams&)params,
+                                 *new TcpServerEchoStats(),
+                                 sock);
         break;
     case TcpServerWorkerParams::WorkerType::RAW:
-        return new TcpServerRaw(factory, (TcpServerRawParams&)params, sock);
+        return new TcpServerRaw(factory,
+                                (TcpServerRawParams&)params,
+                                *new TcpServerRawStats(),
+                                sock);
         break;
     case TcpServerWorkerParams::WorkerType::HTTP:
-        return new TcpServerHttp(factory, (TcpServerHttpParams&)params, sock);
+        return new TcpServerHttp(factory,
+                                 (TcpServerHttpParams&)params,
+                                 *new TcpServerHttpStats(),
+                                 sock);
         break;
     default:
         perror("error: invalid worker type\n");
@@ -398,11 +415,12 @@ TcpServerWorker* TcpServerWorker::maker(TcpServerFactory &factory, TcpServerWork
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-TcpClientWorker::TcpClientWorker(TcpClientFactory &factory, TcpClientWorkerParams &params)
-    : TcpWorker(factory, params),
+TcpClientWorker::TcpClientWorker(TcpClientFactory &factory,
+                                 TcpClientWorkerParams &params,
+                                 TcpClientWorkerStats &stats)
+    : TcpWorker(factory, params, stats),
       params(params),
-      connect_time(0),
-      established_time(0) {
+      stats(stats) {
 
     debug_print("ctor\n");
 
@@ -473,7 +491,7 @@ TcpClientWorker::TcpClientWorker(TcpClientFactory &factory, TcpClientWorkerParam
     ev_timer_start(factory.loop, &sock_timeout);
 
     // Connect timestamp
-    connect_time = timestamp_ns_now();
+    stats.connect_time = timestamp_ns_now();
 }
 
 
@@ -481,8 +499,8 @@ TcpClientWorker::~TcpClientWorker() {
     debug_socket_print(sock, "dtor\n");
     ev_timer_stop(factory.loop, &sock_timeout);
 
-    if(!close_time) {
-        close_time = timestamp_ns_now();
+    if(!stats.close_time) {
+        stats.close_time = timestamp_ns_now();
     }
 
     debug_print("latency: "
@@ -491,10 +509,10 @@ TcpClientWorker::~TcpClientWorker() {
                 "writable=%luns "
                 "close=%luns "
                 "\n",
-                established_time - connect_time,
-                readable_time - established_time,
-                writable_time - established_time,
-                close_time - established_time);
+                stats.established_time - stats.connect_time,
+                stats.readable_time - stats.established_time,
+                stats.writable_time - stats.established_time,
+                stats.close_time - stats.established_time);
 
 }
 
@@ -503,17 +521,24 @@ void TcpClientWorker::finish() {
     return TcpWorker::finish();
 }
 
-TcpClientWorker* TcpClientWorker::maker(TcpClientFactory &factory, TcpClientWorkerParams &params) {
+TcpClientWorker* TcpClientWorker::maker(TcpClientFactory &factory,
+                                        TcpClientWorkerParams &params) {
 
     switch(params.type) {
     case TcpClientWorkerParams::WorkerType::ECHO:
-        return new TcpClientEcho(factory, (TcpClientEchoParams&)params);
+        return new TcpClientEcho(factory,
+                                 (TcpClientEchoParams&)params,
+                                 *new TcpClientEchoStats());
         break;
     case TcpClientWorkerParams::WorkerType::RAW:
-        return new TcpClientRaw(factory, (TcpClientRawParams&)params);
+        return new TcpClientRaw(factory,
+                                (TcpClientRawParams&)params,
+                                *new TcpClientRawStats());
         break;
     case TcpClientWorkerParams::WorkerType::HTTP:
-        return new TcpClientHttp(factory, (TcpClientHttpParams&)params);
+        return new TcpClientHttp(factory,
+                                 (TcpClientHttpParams&)params,
+                                 *new TcpClientHttpStats());
         break;
     default:
         perror("error: invalid worker type\n");
@@ -531,8 +556,8 @@ void TcpClientWorker::connected_cb(struct ev_loop *loop, struct ev_io *watcher, 
 
     TcpClientWorker *worker = (TcpClientWorker*)watcher->data;
 
-    if(!worker->established_time) {
-        worker->established_time = timestamp_ns_now();
+    if(!worker->stats.established_time) {
+        worker->stats.established_time = timestamp_ns_now();
     }
 
     worker->connected_cb();
@@ -590,9 +615,13 @@ void TcpClientWorker::timeout_cb() {
 
 
 ////////////////////////////////////////////////////////////////////////////////
-TcpServerEcho::TcpServerEcho(TcpServerFactory &factory, TcpServerEchoParams &params, int sock)
-    : TcpServerWorker(factory, params, sock),
-      params(params) {
+TcpServerEcho::TcpServerEcho(TcpServerFactory &factory,
+                             TcpServerEchoParams &params,
+                             TcpServerEchoStats &stats,
+                             int sock)
+    : TcpServerWorker(factory, params, stats, sock),
+      params(params),
+      stats(stats) {
     debug_socket_print(sock, "ctor\n");
 }
 
@@ -622,9 +651,12 @@ void TcpServerEcho::read_cb() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-TcpClientEcho::TcpClientEcho(TcpClientFactory &factory, TcpClientEchoParams &params)
-    : TcpClientWorker(factory, params),
-      params(params) {
+TcpClientEcho::TcpClientEcho(TcpClientFactory &factory,
+                             TcpClientEchoParams &params,
+                             TcpClientEchoStats &stats)
+    : TcpClientWorker(factory, params, stats),
+      params(params),
+      stats(stats) {
     debug_print("ctor\n");
 }
 
@@ -654,9 +686,13 @@ void TcpClientEcho::read_cb() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-TcpServerRaw::TcpServerRaw(TcpServerFactory &factory, TcpServerRawParams &params, int sock)
-    : TcpServerWorker(factory, params, sock),
+TcpServerRaw::TcpServerRaw(TcpServerFactory &factory,
+                           TcpServerRawParams &params,
+                           TcpServerRawStats &stats,
+                           int sock)
+    : TcpServerWorker(factory, params, stats, sock),
       params(params),
+      stats(stats),
       payloads(*this, params.payloads) {
     debug_socket_print(sock, "ctor\n");
 }
@@ -688,9 +724,12 @@ void TcpServerRaw::write_cb() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-TcpClientRaw::TcpClientRaw(TcpClientFactory &factory, TcpClientRawParams &params)
-    : TcpClientWorker(factory, params),
+TcpClientRaw::TcpClientRaw(TcpClientFactory &factory,
+                           TcpClientRawParams &params,
+                           TcpClientRawStats &stats)
+    : TcpClientWorker(factory, params, stats),
       params(params),
+      stats(stats),
       payloads(*this, params.payloads) {
     debug_print("ctor\n");
 
@@ -722,9 +761,13 @@ void TcpClientRaw::write_cb() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-TcpServerHttp::TcpServerHttp(TcpServerFactory &factory, TcpServerHttpParams &params, int sock)
-    : TcpServerWorker(factory, params, sock),
+TcpServerHttp::TcpServerHttp(TcpServerFactory &factory,
+                             TcpServerHttpParams &params,
+                             TcpServerHttpStats &stats,
+                             int sock)
+    : TcpServerWorker(factory, params, stats, sock),
       params(params),
+      stats(stats),
       state(ServerState::START),
       firstline_payloads(*this, params.firstline_payloads),
       header_payloads(*this, params.header_payloads),
@@ -989,9 +1032,12 @@ void TcpServerHttp::write_cb() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-TcpClientHttp::TcpClientHttp(TcpClientFactory &factory, TcpClientHttpParams &params)
-    : TcpClientWorker(factory, params),
+TcpClientHttp::TcpClientHttp(TcpClientFactory &factory,
+                             TcpClientHttpParams &params,
+                             TcpClientHttpStats &stats)
+    : TcpClientWorker(factory, params, stats),
       params(params),
+      stats(stats),
       state(ClientState::REQUEST_FIRSTLINE),
       firstline_payloads(*this, params.firstline_payloads),
       header_payloads(*this, params.header_payloads),

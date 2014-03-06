@@ -5,8 +5,8 @@
 Factory::Factory(struct ev_loop *loop,
                  FactoryParams &params)
     : loop(loop),
-      params(params) {
-
+      params(params),
+      statslist() {
 }
 
 Factory::~Factory() {
@@ -16,10 +16,14 @@ Factory* Factory::maker(struct ev_loop *loop, FactoryParams &params) {
 
     switch(params.type) {
     case FactoryParams::FactoryType::TCP_SERVER:
-        return new TcpServerFactory(loop, (TcpServerFactoryParams&)params);
+        return new TcpServerFactory(loop,
+                                    (TcpServerFactoryParams&)params,
+                                    *new TcpServerFactoryStats());
         break;
     case FactoryParams::FactoryType::TCP_CLIENT:
-        return new TcpClientFactory(loop, (TcpClientFactoryParams&)params);
+        return new TcpClientFactory(loop,
+                                    (TcpClientFactoryParams&)params,
+                                    *new TcpClientFactoryStats());
         break;
     default:
         perror("error: invalid factory type\n");
@@ -30,13 +34,11 @@ Factory* Factory::maker(struct ev_loop *loop, FactoryParams &params) {
 
 ////////////////////////////////////////////////////////////////////////////////
 TcpFactory::TcpFactory(struct ev_loop *loop,
-                       TcpFactoryParams &params)
+                       TcpFactoryParams &params,
+                       TcpFactoryStats &stats)
     : Factory(loop, params),
       params(params),
-      bytes_in(0),
-      bytes_out(0),
-      cumulative_count(0)
-{
+      stats(stats) {
 
     debug_print("ctor\n");
 
@@ -64,6 +66,7 @@ TcpFactory::~TcpFactory() {
         workers.pop_front();
     }
 
+    delete &stats;
 }
 
 void TcpFactory::factory_cb(struct ev_loop *loop,
@@ -97,28 +100,31 @@ void TcpFactory::stats_cb() {
            "bytes_out=%lu "
            "count=%lu "
            "workers=%lu\n",
-           bytes_in,
-           bytes_out,
-           cumulative_count,
+           stats.bytes_in,
+           stats.bytes_out,
+           stats.cumulative_count,
            workers.size());
 }
 
 void TcpFactory::worker_new_cb(TcpWorker &worker) {
     workers.push_back(&worker);
     worker.workers_list_pos = --workers.end();
-    cumulative_count++;
+    stats.cumulative_count++;
 }
 
 void TcpFactory::worker_delete_cb(TcpWorker &worker) {
     workers.erase(worker.workers_list_pos);
+    statslist.push(&worker.stats);
     ev_async_send(loop, &factory_async);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 TcpServerFactory::TcpServerFactory(struct ev_loop *loop,
-                                   TcpServerFactoryParams &params)
-    : TcpFactory(loop, params),
-      params(params) {
+                                   TcpServerFactoryParams &params,
+                                   TcpServerFactoryStats &stats)
+    : TcpFactory(loop, params, stats),
+      params(params),
+      stats(stats) {
 
     debug_print("ctor\n");
 
@@ -187,7 +193,7 @@ void TcpServerFactory::accept_cb(struct ev_loop *loop,
 void TcpServerFactory::accept_cb() {
 
     // TODO(Janitha): Maybe this is better done in the worker_new_cb?
-    if(cumulative_count >= params.count) {
+    if(stats.cumulative_count >= params.count) {
         debug_print("cumulative count reached\n");
         ev_io_stop(loop, &accept_watcher);
         ev_async_stop(loop, &factory_async);
@@ -228,9 +234,11 @@ void TcpServerFactory::factory_cb() {
 
 ////////////////////////////////////////////////////////////////////////////////
 TcpClientFactory::TcpClientFactory(struct ev_loop *loop,
-                                   TcpClientFactoryParams &params)
-    : TcpFactory(loop, params),
-      params(params) {
+                                   TcpClientFactoryParams &params,
+                                   TcpClientFactoryStats &stats)
+    : TcpFactory(loop, params, stats),
+      params(params),
+      stats(stats) {
 
     debug_print("ctor\n");
 
@@ -245,7 +253,7 @@ void TcpClientFactory::factory_cb() {
     debug_print("called\n");
 
     // TODO(Janitha): Maybe this is better done in the worker_new_cb?
-    if(cumulative_count >= params.count) {
+    if(stats.cumulative_count >= params.count) {
         debug_print("cumulative count reached\n");
         ev_async_stop(loop, &factory_async);
         return;

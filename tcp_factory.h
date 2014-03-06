@@ -18,6 +18,8 @@ public:
     struct ev_loop *loop;
     FactoryParams &params;
 
+    StatsList statslist;
+
     Factory(struct ev_loop *loop, FactoryParams &params);
     virtual ~Factory();
 
@@ -32,15 +34,14 @@ private:
     struct ev_timer stats_timer;
 public:
     TcpFactoryParams &params;
+    TcpFactoryStats &stats;
+
     struct ev_async factory_async;
     std::list<TcpWorker*> workers;
 
-    // Stats
-    uint64_t bytes_in;
-    uint64_t bytes_out;
-    uint64_t cumulative_count;
-
-    TcpFactory(struct ev_loop *loop, TcpFactoryParams &params);
+    TcpFactory(struct ev_loop *loop,
+               TcpFactoryParams &params,
+               TcpFactoryStats &stats);
     virtual ~TcpFactory();
 
     virtual void worker_new_cb(TcpWorker &worker);
@@ -62,8 +63,11 @@ private:
     struct ev_io accept_watcher;
 public:
     TcpServerFactoryParams &params;
+    TcpServerFactoryStats &stats;
 
-    TcpServerFactory(struct ev_loop *loop, TcpServerFactoryParams &params);
+    TcpServerFactory(struct ev_loop *loop,
+                     TcpServerFactoryParams &params,
+                     TcpServerFactoryStats &stats);
     virtual ~TcpServerFactory();
 
     virtual void start_listening();
@@ -80,8 +84,11 @@ class TcpClientFactory : public TcpFactory {
 private:
 public:
     TcpClientFactoryParams &params;
+    TcpClientFactoryStats &stats;
 
-    TcpClientFactory(struct ev_loop *loop, TcpClientFactoryParams &params);
+    TcpClientFactory(struct ev_loop *loop,
+                     TcpClientFactoryParams &params,
+                     TcpClientFactoryStats &stats);
     virtual ~TcpClientFactory();
 
     virtual void create_connection();
