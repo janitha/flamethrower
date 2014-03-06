@@ -7,6 +7,8 @@
 
 #include <msgpack.hpp>
 
+#include "common.h"
+
 uint64_t timestamp_ns_now();
 
 class Stats;
@@ -14,7 +16,7 @@ class Stats;
 ////////////////////////////////////////////////////////////////////////////////
 class StatsList {
 private:
-    std::list<Stats*> stats;
+    std::list<Stats*> statslist;
 public:
     StatsList();
     virtual ~StatsList();
@@ -33,14 +35,12 @@ public:
 
 
 ////////////////////////////////////////////////////////////////////////////////
-class FactoryStats : public Stats {
-};
-
-class TcpFactoryStats : public FactoryStats {
+class TcpFactoryStats : public Stats {
 public:
     uint64_t bytes_in;
     uint64_t bytes_out;
-    uint64_t cumulative_count;
+    uint64_t cumulative_workers;
+    uint64_t active_workers;
 
     TcpFactoryStats();
     virtual ~TcpFactoryStats();

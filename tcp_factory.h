@@ -14,29 +14,36 @@ class TcpWorker;
 
 // TODO(Janitha): base factory class
 class Factory {
+private:
+    struct ev_timer stats_timer;
 public:
     struct ev_loop *loop;
     FactoryParams &params;
 
     StatsList statslist;
 
+    struct ev_async factory_async;
+
     Factory(struct ev_loop *loop, FactoryParams &params);
     virtual ~Factory();
 
     static Factory* maker(struct ev_loop *loop, FactoryParams &params);
+
+    static void  stats_cb(struct ev_loop *loop, struct ev_timer *watcher, int revents);
+    virtual void stats_cb();
+
+    static void  factory_cb(struct ev_loop *loop, struct ev_async *watcher, int revent);
+    virtual void factory_cb();
 };
 
 ////////////////////////////////////////////////////////////////////////////////
 // Base class for TcpFactories
 ////////////////////////////////////////////////////////////////////////////////
 class TcpFactory : public Factory {
-private:
-    struct ev_timer stats_timer;
 public:
     TcpFactoryParams &params;
     TcpFactoryStats &stats;
 
-    struct ev_async factory_async;
     std::list<TcpWorker*> workers;
 
     TcpFactory(struct ev_loop *loop,
@@ -46,9 +53,7 @@ public:
 
     virtual void worker_new_cb(TcpWorker &worker);
     virtual void worker_delete_cb(TcpWorker &worker);
-    static void  factory_cb(struct ev_loop *loop, struct ev_async *watcher, int revent);
     virtual void factory_cb();
-    static void  stats_cb(struct ev_loop *loop, struct ev_timer *watcher, int revents);
     virtual void stats_cb();
 };
 

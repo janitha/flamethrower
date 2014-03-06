@@ -19,7 +19,8 @@ StatsList::~StatsList() {
 }
 
 void StatsList::push(Stats *stats) {
-
+    statslist.push_back(stats);
+    stats->print();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -44,21 +45,27 @@ TcpFactoryStats::~TcpFactoryStats() {
 }
 
 void TcpFactoryStats::print() {
+    printf("bytes_in=%lu "
+           "bytes_out=%lu "
+           "cumulative_workers=%lu "
+           "active_workers=%lu "
+           "\n",
+           bytes_in,
+           bytes_out,
+           cumulative_workers,
+           active_workers);
 
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 TcpWorkerStats::TcpWorkerStats()
     : Stats() {
-
 }
 
 TcpWorkerStats::~TcpWorkerStats() {
-
 }
 
 void TcpWorkerStats::print() {
-
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -72,6 +79,13 @@ TcpServerWorkerStats::~TcpServerWorkerStats() {
 }
 
 void TcpServerWorkerStats::print() {
+    printf("readable=%luns "
+           "writable=%luns "
+           "close=%luns "
+           "\n",
+           readable_time ? readable_time - established_time : 0,
+           writable_time ? writable_time - established_time : 0,
+           close_time - established_time);
 
 }
 
@@ -87,4 +101,13 @@ TcpClientWorkerStats::~TcpClientWorkerStats() {
 
 void TcpClientWorkerStats::print() {
 
+    printf("connect=%luns "
+           "readable=%luns "
+           "writable=%luns "
+           "close=%luns "
+           "\n",
+           established_time ? established_time - connect_time : 0,
+           readable_time ? readable_time - established_time : 0,
+           writable_time ? writable_time - established_time : 0,
+           close_time - connect_time);
 }

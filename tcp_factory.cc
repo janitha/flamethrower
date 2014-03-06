@@ -7,9 +7,26 @@ Factory::Factory(struct ev_loop *loop,
     : loop(loop),
       params(params),
       statslist() {
+
+    debug_print("ctor\n");
+
+    stats_timer.data = this;
+    ev_timer_init(&stats_timer, stats_cb, 0, 1.0);
+    ev_set_priority(&stats_timer, EV_MAXPRI);
+    ev_timer_start(loop, &stats_timer);
+
+    factory_async.data = this;
+    ev_async_init(&factory_async, factory_cb);
+    ev_async_start(loop, &factory_async);
+
+    ev_async_send(loop, &factory_async);
 }
 
 Factory::~Factory() {
+    debug_print("dtor\n");
+
+    ev_async_stop(loop, &factory_async);
+    ev_timer_stop(loop, &stats_timer);
 }
 
 Factory* Factory::maker(struct ev_loop *loop, FactoryParams &params) {
@@ -32,6 +49,35 @@ Factory* Factory::maker(struct ev_loop *loop, FactoryParams &params) {
     return nullptr;
 }
 
+void Factory::factory_cb(struct ev_loop *loop,
+                            struct ev_async *watcher,
+                            int revents) {
+    debug_print("called\n");
+    if(revents & EV_ERROR) {
+        perror("invalid event");
+        return;
+    }
+    Factory* factory = (Factory*)watcher->data;
+    factory->factory_cb();
+}
+
+void Factory::factory_cb() {
+}
+
+void Factory::stats_cb(struct ev_loop *loop,
+                          struct ev_timer *watcher,
+                          int revents) {
+    if(revents & EV_ERROR) {
+        perror("invalid event");
+        return;
+    }
+    Factory* factory = (Factory*)watcher->data;
+    factory->stats_cb();
+}
+
+void Factory::stats_cb() {
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 TcpFactory::TcpFactory(struct ev_loop *loop,
                        TcpFactoryParams &params,
@@ -41,25 +87,11 @@ TcpFactory::TcpFactory(struct ev_loop *loop,
       stats(stats) {
 
     debug_print("ctor\n");
-
-    stats_timer.data = this;
-    ev_timer_init(&stats_timer, stats_cb, 0, 1.0);
-    ev_set_priority(&stats_timer, EV_MAXPRI);
-    ev_timer_start(loop, &stats_timer);
-
-    factory_async.data = this;
-    ev_async_init(&factory_async, factory_cb);
-    ev_async_start(loop, &factory_async);
-
-    ev_async_send(loop, &factory_async);
 }
 
 TcpFactory::~TcpFactory() {
 
     debug_print("dtor\n");
-
-    ev_async_stop(loop, &factory_async);
-    ev_timer_stop(loop, &stats_timer);
 
     while(!workers.empty()) {
         delete workers.front();
@@ -69,52 +101,32 @@ TcpFactory::~TcpFactory() {
     delete &stats;
 }
 
-void TcpFactory::factory_cb(struct ev_loop *loop,
-                            struct ev_async *watcher,
-                            int revents) {
-    debug_print("called\n");
-    if(revents & EV_ERROR) {
-        perror("invalid event");
-        return;
-    }
-    TcpFactory* factory = (TcpFactory*)watcher->data;
-    factory->factory_cb();
-}
-
 void TcpFactory::factory_cb() {
-}
-
-void TcpFactory::stats_cb(struct ev_loop *loop,
-                          struct ev_timer *watcher,
-                          int revents) {
-    if(revents & EV_ERROR) {
-        perror("invalid event");
-        return;
-    }
-    TcpFactory* factory = (TcpFactory*)watcher->data;
-    factory->stats_cb();
+    return Factory::factory_cb();
 }
 
 void TcpFactory::stats_cb() {
-    printf("bytes_in=%lu "
-           "bytes_out=%lu "
-           "count=%lu "
-           "workers=%lu\n",
-           stats.bytes_in,
-           stats.bytes_out,
-           stats.cumulative_count,
-           workers.size());
+    stats.active_workers = workers.size();
+    stats.print();
+
+    return Factory::stats_cb();
 }
 
 void TcpFactory::worker_new_cb(TcpWorker &worker) {
     workers.push_back(&worker);
     worker.workers_list_pos = --workers.end();
-    stats.cumulative_count++;
+    stats.cumulative_workers++;
 }
 
 void TcpFactory::worker_delete_cb(TcpWorker &worker) {
-    workers.erase(worker.workers_list_pos);
+
+    // Gather stats from worker
     statslist.push(&worker.stats);
+
+    // Remove worker from the worker list
+    workers.erase(worker.workers_list_pos);
+
+    // Schedule the factory to wake up
     ev_async_send(loop, &factory_async);
 }
 
@@ -193,7 +205,7 @@ void TcpServerFactory::accept_cb(struct ev_loop *loop,
 void TcpServerFactory::accept_cb() {
 
     // TODO(Janitha): Maybe this is better done in the worker_new_cb?
-    if(stats.cumulative_count >= params.count) {
+    if(stats.cumulative_workers >= params.count) {
         debug_print("cumulative count reached\n");
         ev_io_stop(loop, &accept_watcher);
         ev_async_stop(loop, &factory_async);
@@ -253,7 +265,7 @@ void TcpClientFactory::factory_cb() {
     debug_print("called\n");
 
     // TODO(Janitha): Maybe this is better done in the worker_new_cb?
-    if(stats.cumulative_count >= params.count) {
+    if(stats.cumulative_workers >= params.count) {
         debug_print("cumulative count reached\n");
         ev_async_stop(loop, &factory_async);
         return;

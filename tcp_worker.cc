@@ -367,16 +367,6 @@ TcpServerWorker::~TcpServerWorker() {
     if(!stats.close_time) {
         stats.close_time = timestamp_ns_now();
     }
-
-    debug_print("latency: "
-                "readable=%luns "
-                "writable=%luns "
-                "close=%luns "
-                "\n",
-                stats.readable_time - stats.established_time,
-                stats.writable_time - stats.established_time,
-                stats.close_time - stats.established_time);
-
 }
 
 void TcpServerWorker::finish() {
@@ -502,18 +492,6 @@ TcpClientWorker::~TcpClientWorker() {
     if(!stats.close_time) {
         stats.close_time = timestamp_ns_now();
     }
-
-    debug_print("latency: "
-                "connect=%luns "
-                "readable=%luns "
-                "writable=%luns "
-                "close=%luns "
-                "\n",
-                stats.established_time - stats.connect_time,
-                stats.readable_time - stats.established_time,
-                stats.writable_time - stats.established_time,
-                stats.close_time - stats.established_time);
-
 }
 
 void TcpClientWorker::finish() {
