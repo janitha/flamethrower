@@ -17,7 +17,10 @@
             "worker" : {
                 "type" : "echo",
 
-                "linger" : 0
+                "initiate_close" : false,
+                "delay_close" : 0,
+
+                "tcp_linger" : 0
             }
         }
     ]
