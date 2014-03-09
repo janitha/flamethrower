@@ -12,33 +12,55 @@ uint64_t timestamp_ns_now() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-StatsList::StatsList() {
+StatsCollector::StatsCollector(StatsParams &params)
+    : params(params),
+      zcontext(1),
+      zpubsocket(zcontext, ZMQ_PUB) {
+
+    debug_print("StatsCollector listening on %s\n", params.listener.c_str());
+    zpubsocket.bind(params.listener.c_str());
 }
 
-StatsList::~StatsList() {
+StatsCollector::~StatsCollector() {
 }
 
-void StatsList::push(Stats *stats) {
-    statslist.push_back(stats);
-    stats->print();
+void StatsCollector::push(Stats *stats) {
+
+    msgpack::sbuffer sbuffer;
+    msgpack::packer<msgpack::sbuffer> packer(sbuffer);
+
+    stats->serialize(packer);
+
+    zmq::message_t msg(sbuffer.size());
+    memcpy(msg.data(), sbuffer.data(), sbuffer.size());
+    zpubsocket.send(msg);
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-Stats::Stats() {
-
+Stats::Stats()
+    : version(1) {
 }
 
 Stats::~Stats() {
-
 }
 
 void Stats::print() {
+}
 
+void Stats::serialize(msgpack::packer<msgpack::sbuffer> &packer) {
+    packer.pack(std::string("stats"));
+    packer.pack(version);
+    packer.pack(timestamp_ns_now());
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 TcpFactoryStats::TcpFactoryStats()
-    : Stats() {
+    : Stats(),
+      bytes_in(0),
+      bytes_out(0),
+      cumulative_workers(0),
+      active_workers(0) {
 }
 
 TcpFactoryStats::~TcpFactoryStats() {
@@ -54,12 +76,25 @@ void TcpFactoryStats::print() {
            bytes_out,
            cumulative_workers,
            active_workers);
+}
 
+void TcpFactoryStats::serialize(msgpack::packer<msgpack::sbuffer> &packer) {
+    Stats::serialize(packer);
+    packer.pack(std::string("tcpfactory"));
+    packer.pack(bytes_in);
+    packer.pack(bytes_out);
+    packer.pack(cumulative_workers);
+    packer.pack(active_workers);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 TcpWorkerStats::TcpWorkerStats()
-    : Stats() {
+    : Stats(),
+      readable_time(0),
+      writable_time(0),
+      close_time(0),
+      bytes_in(0),
+      bytes_out(0) {
 }
 
 TcpWorkerStats::~TcpWorkerStats() {
@@ -68,10 +103,20 @@ TcpWorkerStats::~TcpWorkerStats() {
 void TcpWorkerStats::print() {
 }
 
+void TcpWorkerStats::serialize(msgpack::packer<msgpack::sbuffer> &packer) {
+    Stats::serialize(packer);
+    packer.pack(std::string("tcpworker"));
+    packer.pack(readable_time);
+    packer.pack(writable_time);
+    packer.pack(close_time);
+    packer.pack(bytes_in);
+    packer.pack(bytes_out);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 TcpServerWorkerStats::TcpServerWorkerStats()
-    : TcpWorkerStats() {
-
+    : TcpWorkerStats(),
+      established_time(0) {
 }
 
 TcpServerWorkerStats::~TcpServerWorkerStats() {
@@ -86,12 +131,19 @@ void TcpServerWorkerStats::print() {
            readable_time ? readable_time - established_time : 0,
            writable_time ? writable_time - established_time : 0,
            close_time - established_time);
+}
 
+void TcpServerWorkerStats::serialize(msgpack::packer<msgpack::sbuffer> &packer) {
+    TcpWorkerStats::serialize(packer);
+    packer.pack(std::string("server"));
+    packer.pack(established_time);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 TcpClientWorkerStats::TcpClientWorkerStats()
-    : TcpWorkerStats() {
+    : TcpWorkerStats(),
+      connect_time(0),
+      established_time(0) {
 
 }
 
@@ -110,4 +162,11 @@ void TcpClientWorkerStats::print() {
            readable_time ? readable_time - established_time : 0,
            writable_time ? writable_time - established_time : 0,
            close_time - connect_time);
+}
+
+void TcpClientWorkerStats::serialize(msgpack::packer<msgpack::sbuffer> &packer) {
+    TcpWorkerStats::serialize(packer);
+    packer.pack(std::string("client"));
+    packer.pack(connect_time);
+    packer.pack(established_time);
 }

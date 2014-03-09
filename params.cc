@@ -5,7 +5,6 @@
 #include <map>
 #include <cstdlib>
 
-
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
 
@@ -271,10 +270,19 @@ TcpClientFactoryParams::TcpClientFactoryParams(boost::property_tree::ptree &ptre
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+StatsParams::StatsParams(boost::property_tree::ptree &ptree)
+    : Params(ptree) {
+
+    listener = ptree.get<std::string>("listener");
+}
+
+////////////////////////////////////////////////////////////////////////////////
 FlamethrowerParams::FlamethrowerParams(boost::property_tree::ptree &ptree)
     : Params(ptree) {
 
     version = ptree.get<uint32_t>("version");
+
+    stats = new StatsParams(ptree.get_child("stats"));
 
     for(auto &factory_pair : ptree.get_child("factories")) {
         auto &factory_ptree = factory_pair.second;

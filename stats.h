@@ -5,21 +5,29 @@
 #include <cstdint>
 #include <list>
 
+#include <zmq.hpp>
 #include <msgpack.hpp>
 
 #include "common.h"
+
+#define STATSQUEUE_CAPACITY 9000
 
 uint64_t timestamp_ns_now();
 
 class Stats;
 
 ////////////////////////////////////////////////////////////////////////////////
-class StatsList {
+class StatsCollector {
 private:
-    std::list<Stats*> statslist;
+    StatsParams &params;
+
+    zmq::context_t zcontext;
+    zmq::socket_t zpubsocket;
+
 public:
-    StatsList();
-    virtual ~StatsList();
+
+    StatsCollector(StatsParams &params);
+    virtual ~StatsCollector();
 
     void push(Stats *stats);
 };
@@ -27,10 +35,14 @@ public:
 ////////////////////////////////////////////////////////////////////////////////
 class Stats {
 public:
+
+    uint64_t version;
+
     Stats();
     virtual ~Stats();
 
     virtual void print();
+    virtual void serialize(msgpack::packer<msgpack::sbuffer> &packer);
 };
 
 
@@ -46,6 +58,7 @@ public:
     virtual ~TcpFactoryStats();
 
     virtual void print();
+    virtual void serialize(msgpack::packer<msgpack::sbuffer> &packer);
 };
 
 class TcpServerFactoryStats : public TcpFactoryStats {
@@ -70,6 +83,7 @@ public:
     virtual ~TcpWorkerStats();
 
     virtual void print();
+    virtual void serialize(msgpack::packer<msgpack::sbuffer> &packer);
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -82,6 +96,7 @@ public:
     virtual ~TcpServerWorkerStats();
 
     virtual void print();
+    virtual void serialize(msgpack::packer<msgpack::sbuffer> &packer);
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -95,6 +110,7 @@ public:
     virtual ~TcpClientWorkerStats();
 
     virtual void print();
+    virtual void serialize(msgpack::packer<msgpack::sbuffer> &packer);
 };
 
 ////////////////////////////////////////////////////////////////////////////////

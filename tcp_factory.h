@@ -2,10 +2,11 @@
 #define TCP_FACTORY_H
 
 #include "common.h"
+#include "flamethrower.h"
 
 #include "tcp_worker.h"
 
-
+class Flamethrower;
 class TcpWorker;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -17,17 +18,17 @@ class Factory {
 private:
     struct ev_timer stats_timer;
 public:
-    struct ev_loop *loop;
+    Flamethrower &flamethrower;
     FactoryParams &params;
 
-    StatsList statslist;
+    struct ev_loop *loop;
 
     struct ev_async factory_async;
 
-    Factory(struct ev_loop *loop, FactoryParams &params);
+    Factory(Flamethrower &flamethrower, FactoryParams &params);
     virtual ~Factory();
 
-    static Factory* maker(struct ev_loop *loop, FactoryParams &params);
+    static Factory* maker(Flamethrower &flamethrower, FactoryParams &params);
 
     static void  stats_cb(struct ev_loop *loop, struct ev_timer *watcher, int revents);
     virtual void stats_cb();
@@ -46,7 +47,7 @@ public:
 
     std::list<TcpWorker*> workers;
 
-    TcpFactory(struct ev_loop *loop,
+    TcpFactory(Flamethrower &flamethrower,
                TcpFactoryParams &params,
                TcpFactoryStats &stats);
     virtual ~TcpFactory();
@@ -70,7 +71,7 @@ public:
     TcpServerFactoryParams &params;
     TcpServerFactoryStats &stats;
 
-    TcpServerFactory(struct ev_loop *loop,
+    TcpServerFactory(Flamethrower &flamethrower,
                      TcpServerFactoryParams &params,
                      TcpServerFactoryStats &stats);
     virtual ~TcpServerFactory();
@@ -91,7 +92,7 @@ public:
     TcpClientFactoryParams &params;
     TcpClientFactoryStats &stats;
 
-    TcpClientFactory(struct ev_loop *loop,
+    TcpClientFactory(Flamethrower &flamethrower,
                      TcpClientFactoryParams &params,
                      TcpClientFactoryStats &stats);
     virtual ~TcpClientFactory();

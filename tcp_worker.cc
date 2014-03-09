@@ -36,6 +36,8 @@ TcpWorker::~TcpWorker() {
     }
 
     factory.worker_delete_cb(*this);
+
+    delete &stats;
 }
 
 void TcpWorker::finish() {
@@ -236,6 +238,7 @@ void TcpWorker::write_cb(struct ev_loop *loop, struct ev_io *watcher, int revent
     }
 
     worker->write_cb();
+
 }
 
 void TcpWorker::write_cb() {
@@ -456,7 +459,7 @@ TcpClientWorker::TcpClientWorker(TcpClientFactory &factory,
     sa_connect.sin_family = AF_INET;
     sa_connect.sin_port = factory.params.server_port;
     sa_connect.sin_addr.s_addr = factory.params.server_addr;
-    if(connect(sock, (struct sockaddr *)&sa_connect, sizeof(sa_connect)) < 0) {
+    if(connect(sock, (struct sockaddr *)&sa_connect, sizeof(sa_connect)) != 0) {
         if(errno != EINPROGRESS) {
             perror("socket connect error");
             exit(EXIT_FAILURE);
@@ -939,7 +942,6 @@ void TcpServerHttp::write_cb() {
 
         case ServerState::RESPONSE_FIRSTLINE:
             debug_socket_print(sock, "state=response_firstline\n");
-
             ret = write_payloads(firstline_payloads, sendlen, sentlen);
             if(ret == SockAct::CLOSE) {
                 state = ServerState::RESPONSE_FIRSTLINE_END;
@@ -949,14 +951,11 @@ void TcpServerHttp::write_cb() {
 
         case ServerState::RESPONSE_FIRSTLINE_END:
             debug_socket_print(sock, "state=response_firstline_end\n");
-
             // TODO(Janitha): Emit CRLF (workaround in config file payload)
-
             state = ServerState::RESPONSE_HEADER;
 
         case ServerState::RESPONSE_HEADER:
             debug_socket_print(sock, "state=response_header\n");
-
             ret = write_payloads(header_payloads, sendlen, sentlen);
             if(ret == SockAct::CLOSE) {
                 state = ServerState::RESPONSE_HEADER_END;
@@ -966,14 +965,11 @@ void TcpServerHttp::write_cb() {
 
         case ServerState::RESPONSE_HEADER_END:
             debug_socket_print(sock, "state=response_header_end\n");
-
             // TODO(Janitha): Emit CRLF (workaround in config file payload)
-
             state = ServerState::RESPONSE_BODY;
 
         case ServerState::RESPONSE_BODY:
             debug_socket_print(sock, "state=response_body\n");
-
             ret = write_payloads(body_payloads, sendlen, sentlen);
             if(ret == SockAct::CLOSE) {
                 state = ServerState::RESPONSE_DONE;
@@ -983,7 +979,6 @@ void TcpServerHttp::write_cb() {
 
         case ServerState::RESPONSE_DONE:
             debug_socket_print(sock, "state=response_done\n");
-
             state = ServerState::DONE;
 
         case ServerState::DONE:
@@ -1004,9 +999,11 @@ void TcpServerHttp::write_cb() {
             delete this;
             return;
         }
+
     }
 
     tcp_cork(false);
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1022,9 +1019,6 @@ TcpClientHttp::TcpClientHttp(TcpClientFactory &factory,
       body_payloads(*this, params.body_payloads) {
 
     debug_print("ctor\n");
-
-    debug_print("HTTP CLIENT IS BROKEN, WORK IN PROGRESS\n");
-    exit(EXIT_FAILURE);
 }
 
 TcpClientHttp::~TcpClientHttp() {
@@ -1038,9 +1032,120 @@ void TcpClientHttp::finish() {
 void TcpClientHttp::read_cb() {
     debug_socket_print(sock, "called\n");
 
+    char recvbuf_array[RECVBUF_SIZE];
+    char *recvbuf = recvbuf_array;
+    memset(recvbuf, 0, sizeof(recvbuf));
+    size_t recvlen;
+
+    // Switch for socket recv
+    switch(recv_buf(recvbuf_array, sizeof(recvbuf_array), recvlen)) {
+    case SockAct::CONTINUE:
+        break;
+    case SockAct::CLOSE:
+        return finish();
+    case SockAct::ERROR:
+        debug_socket_print(sock, "recv error\n");
+        // Fallthrough
+    default:
+        delete this;
+        return;
+    }
+
+    if(!recvlen) {
+        return;
+    }
+
+    debug_socket_print(sock, "read %lu bytes\n", recvlen);
+
+    // Switch for reading decision
+    switch(state) {
+    case ClientState::RESPONSE:
+        debug_socket_print(sock, "state=reading_response\n");
+        break;
+
+    case ClientState::DONE:
+        debug_socket_print(sock, "state=done\n");
+        break;
+
+    default:
+        debug_socket_print(sock, "recv response before request\n");
+        break;
+    }
+
+
 }
 
 void TcpClientHttp::write_cb() {
     debug_socket_print(sock, "called\n");
 
+    size_t sendlen = SENDBUF_SIZE;
+    size_t sentlen;
+    SockAct ret;
+
+    tcp_cork(true);
+
+    while(sendlen) {
+
+        sentlen = 0;
+
+        // Switch for action decision
+        switch(state) {
+        case ClientState::START:
+            state = ClientState::REQUEST_FIRSTLINE;
+
+        case ClientState::REQUEST_FIRSTLINE:
+            debug_socket_print(sock, "state=request_firstline\n");
+            ret = write_payloads(firstline_payloads, sendlen, sentlen);
+            if(ret == SockAct::CLOSE) {
+                state = ClientState::REQUEST_FIRSTLINE_END;
+            }
+            sendlen -= sentlen;
+            break;
+
+        case ClientState::REQUEST_FIRSTLINE_END:
+            debug_socket_print(sock, "state=request_firstline_end\n");
+            // TODO(Janitha): Emit CRLF (workaround in config file payload)
+            state = ClientState::REQUEST_HEADER;
+
+        case ClientState::REQUEST_HEADER:
+            debug_socket_print(sock, "state=request_header\n");
+            ret = write_payloads(header_payloads, sendlen, sentlen);
+            if(ret == SockAct::CLOSE) {
+                state = ClientState::REQUEST_HEADER_END;
+            }
+            sendlen -= sentlen;
+            break;
+
+        case ClientState::REQUEST_HEADER_END:
+            debug_socket_print(sock, "state=request_header_end\n");
+            // TODO(Janitha): Emit CRLF (workaround in config file payload)
+            state = ClientState::REQUEST_BODY;
+
+        case ClientState::REQUEST_BODY:
+            debug_socket_print(sock, "state=request_body\n");
+            ret = write_payloads(body_payloads, sendlen, sentlen);
+            if(ret == SockAct::CLOSE) {
+                state = ClientState::REQUEST_DONE;
+            }
+            sendlen -= sentlen;
+            break;
+
+        case ClientState::REQUEST_DONE:
+            debug_socket_print(sock, "state=request_done\n");
+            state = ClientState::RESPONSE;
+            break;
+
+        default:
+            ev_io_stop(factory.loop, &sock_w_ev);
+            return;
+        }
+
+        if(ret == SockAct::ERROR) {
+            perror("error writing payload");
+            delete this;
+            return;
+        }
+    }
+
+    tcp_cork(false);
 }

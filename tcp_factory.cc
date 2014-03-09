@@ -2,11 +2,11 @@
 #include "tcp_worker.h"
 
 ////////////////////////////////////////////////////////////////////////////////
-Factory::Factory(struct ev_loop *loop,
+Factory::Factory(Flamethrower &flamethrower,
                  FactoryParams &params)
-    : loop(loop),
+    : flamethrower(flamethrower),
       params(params),
-      statslist() {
+      loop(flamethrower.loop) {
 
     debug_print("ctor\n");
 
@@ -29,16 +29,16 @@ Factory::~Factory() {
     ev_timer_stop(loop, &stats_timer);
 }
 
-Factory* Factory::maker(struct ev_loop *loop, FactoryParams &params) {
+Factory* Factory::maker(Flamethrower &flamethrower, FactoryParams &params) {
 
     switch(params.type) {
     case FactoryParams::FactoryType::TCP_SERVER:
-        return new TcpServerFactory(loop,
+        return new TcpServerFactory(flamethrower,
                                     (TcpServerFactoryParams&)params,
                                     *new TcpServerFactoryStats());
         break;
     case FactoryParams::FactoryType::TCP_CLIENT:
-        return new TcpClientFactory(loop,
+        return new TcpClientFactory(flamethrower,
                                     (TcpClientFactoryParams&)params,
                                     *new TcpClientFactoryStats());
         break;
@@ -50,8 +50,8 @@ Factory* Factory::maker(struct ev_loop *loop, FactoryParams &params) {
 }
 
 void Factory::factory_cb(struct ev_loop *loop,
-                            struct ev_async *watcher,
-                            int revents) {
+                         struct ev_async *watcher,
+                         int revents) {
     debug_print("called\n");
     if(revents & EV_ERROR) {
         perror("invalid event");
@@ -65,8 +65,8 @@ void Factory::factory_cb() {
 }
 
 void Factory::stats_cb(struct ev_loop *loop,
-                          struct ev_timer *watcher,
-                          int revents) {
+                       struct ev_timer *watcher,
+                       int revents) {
     if(revents & EV_ERROR) {
         perror("invalid event");
         return;
@@ -79,10 +79,10 @@ void Factory::stats_cb() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-TcpFactory::TcpFactory(struct ev_loop *loop,
+TcpFactory::TcpFactory(Flamethrower &flamethrower,
                        TcpFactoryParams &params,
                        TcpFactoryStats &stats)
-    : Factory(loop, params),
+    : Factory(flamethrower, params),
       params(params),
       stats(stats) {
 
@@ -98,6 +98,8 @@ TcpFactory::~TcpFactory() {
         workers.pop_front();
     }
 
+    flamethrower.statsbucket.push(&stats);
+
     delete &stats;
 }
 
@@ -108,7 +110,7 @@ void TcpFactory::factory_cb() {
 void TcpFactory::stats_cb() {
     stats.active_workers = workers.size();
     stats.print();
-
+    flamethrower.statsbucket.push(&stats);
     return Factory::stats_cb();
 }
 
@@ -121,7 +123,7 @@ void TcpFactory::worker_new_cb(TcpWorker &worker) {
 void TcpFactory::worker_delete_cb(TcpWorker &worker) {
 
     // Gather stats from worker
-    statslist.push(&worker.stats);
+    flamethrower.statsbucket.push(&worker.stats);
 
     // Remove worker from the worker list
     workers.erase(worker.workers_list_pos);
@@ -131,10 +133,10 @@ void TcpFactory::worker_delete_cb(TcpWorker &worker) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-TcpServerFactory::TcpServerFactory(struct ev_loop *loop,
+TcpServerFactory::TcpServerFactory(Flamethrower &flamethrower,
                                    TcpServerFactoryParams &params,
                                    TcpServerFactoryStats &stats)
-    : TcpFactory(loop, params, stats),
+    : TcpFactory(flamethrower, params, stats),
       params(params),
       stats(stats) {
 
@@ -245,10 +247,10 @@ void TcpServerFactory::factory_cb() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-TcpClientFactory::TcpClientFactory(struct ev_loop *loop,
+TcpClientFactory::TcpClientFactory(Flamethrower &flamethrower,
                                    TcpClientFactoryParams &params,
                                    TcpClientFactoryStats &stats)
-    : TcpFactory(loop, params, stats),
+    : TcpFactory(flamethrower, params, stats),
       params(params),
       stats(stats) {
 

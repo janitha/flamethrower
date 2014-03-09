@@ -258,14 +258,15 @@ private:
 public:
 
     enum class ClientState {
+        START,
         REQUEST_FIRSTLINE,
+        REQUEST_FIRSTLINE_END,
         REQUEST_HEADER,
+        REQUEST_HEADER_END,
         REQUEST_BODY,
         REQUEST_DONE,
-        RESPONSE_FIRSTLINE,
-        RESPONSE_HEADER,
-        RESPONES_BODY,
-        RESPONSE_DONE
+        RESPONSE,
+        DONE
     } state;
 
     PayloadList firstline_payloads;

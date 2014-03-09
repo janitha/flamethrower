@@ -5,6 +5,7 @@
 
 #include "tcp_factory.h"
 
+class Factory;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Flamethrower main class
@@ -16,6 +17,8 @@ public:
     FlamethrowerParams params;
 
     std::list<Factory*> factories;
+
+    StatsCollector statsbucket;
 
     Flamethrower(boost::property_tree::ptree &params_ptree);
     virtual ~Flamethrower();
