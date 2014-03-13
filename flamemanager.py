@@ -41,7 +41,7 @@ class TcpFactoryStats(Stats):
     def init(cls, filename):
         print "Opening", filename
         cls.FD = open(filename, 'w')
-        cls.FD.write("{:19},{:15},{:15},{:15}\n".format(
+        cls.FD.write("{:19},{:15},{:15},{:15},{:15}\n".format(
             "timestamp", "bytes_in", "bytes_out", "cumulative_w", "active_w"))
 
     @classmethod
