@@ -34,7 +34,6 @@ void StatsCollector::push(Stats *stats) {
     zmq::message_t msg(sbuffer.size());
     memcpy(msg.data(), sbuffer.data(), sbuffer.size());
     zpubsocket.send(msg);
-
 }
 
 ////////////////////////////////////////////////////////////////////////////////

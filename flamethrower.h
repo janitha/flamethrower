@@ -1,6 +1,9 @@
 #ifndef FLAMETHROWER_H
 #define FLAMETHROWER_H
 
+#include <list>
+#include <string>
+
 #include "common.h"
 
 #include "tcp_factory.h"
@@ -13,6 +16,8 @@ class Factory;
 class Flamethrower {
 private:
 public:
+    std::string uuid;
+
     struct ev_loop *loop;
     FlamethrowerParams params;
 

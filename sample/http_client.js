@@ -14,8 +14,8 @@
             "server_port" : 9999,
             "connect_timeout" : 10,
 
-            "concurrency" : 2,
-            "count" : 5000000,
+            "concurrency" : 5,
+            "count" : 2000,
 
             "worker" : {
                 "type" : "http",
@@ -41,12 +41,6 @@
                 "body_payloads" : [{
                     "type" : "string",
                     "string" : "\r\n"
-                }, {
-                    "type" : "file",
-                    "filename" : "sample/loremipsum.payload"
-                }, {
-                    "type" : "random",
-                    "length" : 1000
                 }],
 
                 "initiate_close" : false,

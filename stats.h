@@ -4,13 +4,12 @@
 #include <ctime>
 #include <cstdint>
 #include <list>
+#include <string>
 
 #include <zmq.hpp>
 #include <msgpack.hpp>
 
 #include "common.h"
-
-#define STATSQUEUE_CAPACITY 9000
 
 uint64_t timestamp_ns_now();
 

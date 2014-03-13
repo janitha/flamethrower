@@ -10,7 +10,7 @@
             "bind_addr" : "0.0.0.0",
             "bind_port" : 9999,
 
-            "concurrency" : 10000,
+            "concurrency" : 100000,
             "count" : 5000000,
 
             "accept_backlog" : 10,
@@ -44,7 +44,7 @@
                     "filename" : "sample/loremipsum.payload"
                 }, {
                     "type" : "random",
-                    "length" : 10000000
+                    "length" : 100
                 }],
 
                 "initiate_close" : true,
